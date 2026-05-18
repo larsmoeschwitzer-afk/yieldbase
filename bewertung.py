@@ -90,7 +90,7 @@ def berechne_rendite_pro(kaufpreis, knk_prozent, miete_jahr, bew_kosten_prozent,
     dscr = round(netto_miete_jahr / kapitaldienst_jahr, 2) if kapitaldienst_jahr > 0 else "∞"
     
     bemessungsgrundlage_basis = gesamt_inv * (gebaeudeanteil / 100)
-    if ist_denkmal:
+    if is_denkmal:
         sanierungs_summe = bemessungsgrundlage_basis * (denkmal_sanierungsanteil / 100)
         altbau_substanz_summe = bemessungsgrundlage_basis - sanierungs_summe
         afa_jahr_substanz = altbau_substanz_summe * 0.02
@@ -225,62 +225,4 @@ if menue == "Exposé Quick Check":
         else:
             reinertrag_jahr = jahresmiete * (1 - (default_bew / 100))
             
-        bruttorendite = (jahresmiete / qc_preis) * 100 if qc_preis > 0 else 0
-        faktor = qc_preis / jahresmiete if jahresmiete > 0 else 0
-        quadratmeterpreis = qc_preis / qc_flaeche if qc_flaeche > 0 else 0
-        
-        gesamtinvestition = qc_preis * (1 + (qc_knk / 100))
-        fremdkapital = gesamtinvestition * 0.80
-        kapitaldienst_jahr = fremdkapital * (0.04 + 0.02)
-        simulierter_cashflow_monat = (reinertrag_jahr - kapitaldienst_jahr) / 12
-        
-        st.markdown("### 📊 Indikatoren-Analyse")
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Kaufpreisfaktor", f"{faktor:.1f} x")
-        c2.metric("Bruttorendite p.a.", f"{bruttorendite:.2f} %")
-        c3.metric("Quadratmeterpreis", f"{quadratmeterpreis:,.0f} €/m²".replace(",", "."))
-        
-        st.divider()
-        st.markdown("### Deal-Rating")
-        
-        col_a1, col_a2 = st.columns(2)
-        with col_a1:
-            if faktor <= 22:
-                st.markdown("<div class='indicator-card indicator-green'>🟢 ATTRAKTIVER EINSTIEGPREIS<br><span style='font-size:0.8rem;font-weight:normal;'>Der Faktor liegt im grünen Bereich für Cashflow-Investments.</span></div>", unsafe_allow_html=True)
-            elif faktor <= 28:
-                st.markdown("<div class='indicator-card indicator-yellow'>🟡 MARKTÜBLICHER BESTANDSWERT<br><span style='font-size:0.8rem;font-weight:normal;'>Solider Preis, erfordert präzises Nachverhandeln.</span></div>", unsafe_allow_html=True)
-            else:
-                st.markdown("<div class='indicator-card indicator-red'>🔴 EXPANSIVER SPEKULATIONSPREIS<br><span style='font-size:0.8rem;font-weight:normal;'>Erhöhtes Risiko für negativen Cashflow.</span></div>", unsafe_allow_html=True)
-                
-        with col_a2:
-            if simulierter_cashflow_monat >= 50:
-                st.markdown(f"<div class='indicator-card indicator-green'>🟢 POSITIVER CASHFLOW (EST.)<br><span style='font-size:0.8rem;font-weight:normal;'>Ca. +{simulierter_cashflow_monat:,.2f} €/Monat vor Steuern (bei 80% Finanzierung).</span></div>".replace(",", "."), unsafe_allow_html=True)
-            elif simulierter_cashflow_monat >= -50:
-                st.markdown(f"<div class='indicator-card indicator-yellow'>🟡 CASHFLOW-NEUTRAL (EST.)<br><span style='font-size:0.8rem;font-weight:normal;'>Objekt trägt sich fast von selbst (ca. {simulierter_cashflow_monat:,.2f} €/Monat).</span></div>".replace(",", "."), unsafe_allow_html=True)
-            else:
-                st.markdown(f"<div class='indicator-card indicator-red'>🔴 NEGATIVE LIQUIDITÄTS-BELASTUNG<br><span style='font-size:0.8rem;font-weight:normal;'>Zuzahlungsgeschäft! Ca. {simulierter_cashflow_monat:,.2f} €/Monat Unterdeckung.</span></div>".replace(",", "."), unsafe_allow_html=True)
-        st.write("")
-        st.info("💡 **Profi-Tipp:** Wenn dieser Schnelltest positiv ausfällt, schalten Sie in der linken Seitenleiste auf den Modus **Premium Valuation Pipeline** um, um das vollumfängliche Banken-Audit zu starten.")
-
-elif "1. Standort & Mikrolage" in menue:
-    st.image("https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?ixlib=rb-4.0.3&auto=format&fit=crop&w=1600&h=400&q=80", use_container_width=True)
-    st.title("Premium Valuation: 1. Standort & Mikrolage")
-    st.write("")
-    c_f1, c_f2, c_f3 = st.columns(3)
-    c_f1.markdown("<div class='feature-card'><div class='feature-title'>📍 Live Geocoding</div><div class='feature-desc'>Echtzeit-Standortanalyse via globaler GIS-Schnittstellen.</div></div>", unsafe_allow_html=True)
-    c_f2.markdown("<div class='feature-card'><div class='feature-title'>📈 Bodenwerte</div><div class='feature-desc'>Verifizierung behördlicher Richtwerte für Top-Lagen.</div></div>", unsafe_allow_html=True)
-    c_f3.markdown(f"<div class='feature-card'><div class='feature-title'>🏢 Fokus: {immo_zustand}</div><div class='feature-desc'>Algorithmen auf Spezifikation kalibriert.</div></div>", unsafe_allow_html=True)
-    st.write("")
-    st.divider()
-    
-    adresse = st.text_input("Vollständige Objektadresse", value="Witneystraße 19, 82008 Unterhaching")
-    st.markdown("<div class='legal-text'>ℹ️ <b>Datenschutz-Hinweis:</b> Mit Klick auf den Button werden Adressdaten verschlüsselt an die Nominatim API übertragen, um Geokoordinaten zu bestimmen. Es werden keine Logfiles gespeichert.</div>", unsafe_allow_html=True)
-    
-    if st.button("Standortdaten & BRW abrufen", type="primary"):
-        lat_fallback, lon_fallback = 48.062, 11.621
-        geolocator = Nominatim(user_agent="YieldBase_Production_System")
-        with st.spinner("Verbindung zu Satelliten-Servern wird aufgebaut..."):
-            try:
-                location = geolocator.geocode(adresse, timeout=4)
-                if location: lat_final, lon_final = location.latitude, location.longitude
-                else: lat_final, lon_final = lat_fallback,
+        bruttorendite = (jahresmiete
