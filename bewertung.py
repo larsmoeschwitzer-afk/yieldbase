@@ -72,7 +72,7 @@ def berechne_sachwert(bgf, nhk, regionalfaktor, baupreisindex, awm_prozent, bode
     gebaeudesachwert = herstellungskosten - (herstellungskosten * (awm_prozent / 100))
     vorlaeufiger_sachwert = gebaeudesachwert + bodenwert
     marktsachwert = vorlaeufiger_sachwert * sachwertfaktor
-    return marktsachwert, gebaeude_sw, herstellungskosten, vorlaeufiger_sachwert
+    return marktsachwert, gebaeudesachwert, herstellungskosten, vorlaeufiger_sachwert
 
 def berechne_rendite_pro(kaufpreis, knk_prozent, miete_jahr, bew_kosten_prozent, ek_prozent, zins_prozent, 
                         tilgung_prozent, steuersatz, afa_regulaer_satz, gebaeudeanteil, 
@@ -171,7 +171,6 @@ with st.sidebar:
         st.divider()
         st.markdown("#### Globale System-Variablen")
         
-        # FIX: Wert wird über value geladen, getrennt vom Widget-Key zur Laufzeit-Sicherheit
         rnd_eingabe_sidebar = st.number_input("Restnutzungsdauer (RND):", min_value=1, max_value=100, value=int(st.session_state.rnd_kalibriert), key="rnd_widget_input")
         st.session_state.rnd_kalibriert = rnd_eingabe_sidebar
         st.write(f"Aktueller Bodenwert: **{st.session_state.bodenrichtwert_api} €/m²**")
@@ -284,60 +283,4 @@ elif "1. Standort & Mikrolage" in menue:
             try:
                 location = geolocator.geocode(adresse, timeout=4)
                 if location: lat_final, lon_final = location.latitude, location.longitude
-                else: lat_final, lon_final = lat_fallback, lon_fallback
-            except Exception: lat_final, lon_final = lat_fallback, lon_fallback
-                
-        with st.spinner("Behördliche WMS-Schnittstelle wird kontaktiert..."):
-            brw_api_ergebnis = api_abfrage_bodenrichtwert(lat_final, lon_final, adresse)
-            st.session_state.bodenrichtwert_api = brw_api_ergebnis
-            
-        st.success(f"**Verifiziert:** Der amtliche Bodenrichtwert beträgt **{brw_api_ergebnis} €/m²**.")
-        st.map(pd.DataFrame({'lat': [lat_final], 'lon': [lon_final]}), zoom=15)
-
-elif "2. Substanz & RND" in menue:
-    st.image("https://images.unsplash.com/photo-1503387762-592deb58ef4e?ixlib=rb-4.0.3&auto=format&fit=crop&w=1600&h=400&q=80", use_container_width=True)
-    st.title("Premium Valuation: 2. Bausubstanz & Restnutzungsdauer")
-    st.divider()
-    if immo_zustand == "Neubau": default_bj = current_year
-    elif immo_zustand == "Denkmalschutz / Sanierung": default_bj = 1910
-    else: default_bj = 1975
-        
-    col_b1, col_b2 = st.columns(2, gap="large")
-    with col_b1: baujahr = st.number_input("Errichtungsjahr", min_value=1800, max_value=current_year, value=default_bj)
-    with col_b2: gnd = st.number_input("Gesamtnutzungsdauer (GND)", min_value=40, max_value=100, value=80)
-    alter = current_year - baujahr
-    basis_rnd = max(0, gnd - alter)
-    
-    st.markdown("#### Modernisierungs-Punkte (Werttreiber)")
-    col5, col6 = st.columns(2, gap="large")
-    with col5:
-        dach = st.slider("Dach & Fassade", 0, 4, 0)
-        fenster = st.slider("Fenster & Türen", 0, 4, 0)
-        heizung = st.slider("Wärmeerzeugung", 0, 4, 0)
-    with col6:
-        sanitaer = st.slider("Sanitärbereiche", 0, 4, 0)
-        innen = st.slider("Innenausbau", 0, 4, 0)
-        
-    gesamtpunkte = dach + fenster + heizung + sanitaer + innen
-    grad, zusatz_jahre = berechne_modernisierungsgrad(gesamtpunkte)
-    neue_rnd = min(gnd, basis_rnd + zusatz_jahre)
-    st.info(f"Substanz-Rating: **{grad}** (Wirtschaftlicher Lebenszyklus verlängert sich um {zusatz_jahre} Jahre)")
-    
-    # FIX: Das Überschreiben erfolgt nun direkt auf der Variablen ohne Widget-Konflikt
-    if st.button("Restnutzungsdauer kalibrieren", type="primary"):
-        st.session_state.rnd_kalibriert = neue_rnd
-        st.rerun()
-
-elif "3. Ertragswert (ImmoWertV)" in menue:
-    st.image("https://images.unsplash.com/photo-1554469384-e58fac16e23a?ixlib=rb-4.0.3&auto=format&fit=crop&w=1600&h=400&q=80", use_container_width=True)
-    st.title("Premium Valuation: 3. Ertragswert nach ImmoWertV")
-    st.caption(f"Dynamische Voreinstellungen aktiv für: {immo_klasse} ({immo_zustand})")
-    st.divider()
-    col_a, col_b = st.columns(2, gap="large")
-    with col_a:
-        miete = st.number_input("Jahresnettokaltmiete (Ist-Miete €)", min_value=0, value=24000, step=1000)
-        bew_kosten = st.slider("Bewirtschaftungskosten (%)", 0, 40, int(default_bew))
-        zins = st.number_input("Liegenschaftszins p.a. (%)", min_value=0.1, max_value=15.0, value=default_zins, step=0.1)
-    with col_b:
-        flaeche = st.number_input("Grundstücksfläche (m²)", min_value=0, value=500, step=50)
-        brw = st.number_input("Bodenrichtwert (€
+                else: lat_final, lon_final = lat_fallback,
