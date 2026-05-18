@@ -36,12 +36,21 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 1. SESSION STATE ---
+# --- 1. PERSISTENT SESSION STATE VALUES ---
 if 'rnd_kalibriert' not in st.session_state: st.session_state.rnd_kalibriert = 40
 if 'ertragswert_ergebnis' not in st.session_state: st.session_state.ertragswert_ergebnis = None
 if 'sachwert_ergebnis' not in st.session_state: st.session_state.sachwert_ergebnis = None
 if 'rendite_ergebnis' not in st.session_state: st.session_state.rendite_ergebnis = None
 if 'bodenrichtwert_api' not in st.session_state: st.session_state.bodenrichtwert_api = 800
+
+# Quick Check Speicher-Variablen initialisieren
+if 'qc_preis_val' not in st.session_state: st.session_state.qc_preis_val = 350000
+if 'qc_miete_val' not in st.session_state: st.session_state.qc_miete_val = 1200
+if 'qc_flaeche_val' not in st.session_state: st.session_state.qc_flaeche_val = 75
+if 'qc_knk_val' not in st.session_state: st.session_state.qc_knk_val = 8.5
+if 'opt_hausgeld_val' not in st.session_state: st.session_state.opt_hausgeld_val = 0
+if 'opt_sollmiete_val' not in st.session_state: st.session_state.opt_sollmiete_val = 0
+if 'opt_grundstueck_val' not in st.session_state: st.session_state.opt_grundstueck_val = 0
 
 # --- 2. BACKEND ENGINE ---
 def berechne_rbf(liegenschaftszins, restnutzungsdauer):
@@ -207,19 +216,29 @@ if menue == "Exposé Quick Check":
     
     col_q1, col_q2 = st.columns(2, gap="large")
     with col_q1:
-        qc_preis = st.number_input("Kaufpreis laut Exposé (€)", min_value=0, value=350000, step=10000)
-        qc_miete = st.number_input("Monatliche Ist-Kaltmiete (€)", min_value=0, value=1200, step=50)
+        qc_preis = st.number_input("Kaufpreis laut Exposé (€)", min_value=0, value=int(st.session_state.qc_preis_val), step=10000, key="qc_preis_input")
+        st.session_state.qc_preis_val = qc_preis
+        
+        qc_miete = st.number_input("Monatliche Ist-Kaltmiete (€)", min_value=0, value=int(st.session_state.qc_miete_val), step=50, key="qc_miete_input")
+        st.session_state.qc_miete_val = qc_miete
     with col_q2:
-        qc_flaeche = st.number_input("Wohnfläche (m²)", min_value=1, value=75, step=5)
-        qc_knk = st.slider("Kaufnebenkosten-Schätzung (%)", 5.0, 15.0, 8.5, step=0.5)
+        qc_flaeche = st.number_input("Wohnfläche (m²)", min_value=1, value=int(st.session_state.qc_flaeche_val), step=5, key="qc_flaeche_input")
+        st.session_state.qc_flaeche_val = qc_flaeche
+        
+        qc_knk = st.slider("Kaufnebenkosten-Schätzung (%)", 5.0, 15.0, float(st.session_state.qc_knk_val), step=0.5, key="qc_knk_input")
+        st.session_state.qc_knk_val = qc_knk
 
-    with st.expander("➕ Optionale Exposé-Angaben hinzufügen (Überschreibt Erfahrungswerte)"):
+    with st.expander("➕ Optionale Exposé-Angaben hinzufügen (Überschreibt Erfahrungswerte)", expanded=True):
         col_o1, col_o2 = st.columns(2)
         with col_o1:
-            opt_hausgeld = st.number_input("Tatsächliches Hausgeld / nicht umlegbare OpEx (€/Monat)", min_value=0, value=0, help="Lassen Sie 0 stehen, damit das Tool die Instandhaltung basierend auf der Asset-Spezifikation automatisch schttzt.")
-            opt_sollmiete = st.number_input("Soll-Miete / Mietpotenzial p.a. (€)", min_value=0, value=0, help="Wenn das Objekt Mietsteigerungspotenzial aufweist.")
+            opt_hausgeld = st.number_input("Tatsächliches Hausgeld / nicht umlegbare OpEx (€/Monat)", min_value=0, value=int(st.session_state.opt_hausgeld_val), help="Geben Sie hier das monatliche Hausgeld oder die nicht umlegbaren Betriebskosten laut Abrechnung ein. Bleibt der Wert bei 0, schätzt das Tool die Pauschale bankenüblich anhand der Objektart.", key="opt_hausgeld_input")
+            st.session_state.opt_hausgeld_val = opt_hausgeld
+            
+            opt_sollmiete = st.number_input("Soll-Miete / Mietpotenzial p.a. (€)", min_value=0, value=int(st.session_state.opt_sollmiete_val), help="Falls das Objekt aktuell leer steht oder massiv untervermietet ist, können Sie hier die realistische Ziel-Jahresmiete eingeben. Das Tool nutzt diese dann für die Renditeberechnung.", key="opt_sollmiete_input")
+            st.session_state.opt_sollmiete_val = opt_sollmiete
         with col_o2:
-            opt_grundstueck = st.number_input("Grundstücksfläche (m²)", min_value=0, value=0, help="Nur relevant bei Häusern/Mehrfamilienhäusern zur exakteren Bodenwertermittlung im Quick-Check.")
+            opt_grundstueck = st.number_input("Grundstücksfläche (m²)", min_value=0, value=int(st.session_state.opt_grundstueck_val), help="Nur relevant für Einfamilienhäuser oder Mehrfamilienhäuser. Ermöglicht im Hintergrund eine präzisere Aufteilung in Bodenwert und Gebäudewert.", key="opt_grundstueck_input")
+            st.session_state.opt_grundstueck_val = opt_grundstueck
 
     if st.button("Exposé-Schnellprüfung ausführen", type="primary"):
         jahresmiete = (opt_sollmiete if opt_sollmiete > 0 else qc_miete * 12)
@@ -417,7 +436,7 @@ elif "5. Cashflow & Leverage Engine" in menue:
         if immo_zustand == "Denkmalschutz / Sanierung":
             st.warning("⚡ **Denkmal-Modus aktiv:** Das System hat das Profi-Steuerpanel unten automatisch für die Sanierungs-AfA nach § 7i EStG freigeschaltet!")
         else:
-            st.info(f"💡 **Asset-Szenario:** Berechnungen basieren on den gesetzlichen Abschreibungssätzen für {immo_zustand}.")
+            st.info(f"💡 **Asset-Szenario:** Berechnungen basieren auf den gesetzlichen Abschreibungssätzen für {immo_zustand}.")
 
     with st.expander("⚙️ Tax & Compliance Engine (AfA / Steuern)", expanded=True):
         col_p1, col_p2, col_p3 = st.columns(3)
