@@ -41,7 +41,6 @@ if 'sachwert_ergebnis' not in st.session_state: st.session_state.sachwert_ergebn
 if 'rendite_ergebnis' not in st.session_state: st.session_state.rendite_ergebnis = None
 if 'bodenrichtwert_api' not in st.session_state: st.session_state.bodenrichtwert_api = 800
 
-# Quick Check Speicher
 if 'qc_preis_val' not in st.session_state: st.session_state.qc_preis_val = 350000
 if 'qc_miete_val' not in st.session_state: st.session_state.qc_miete_val = 1200
 if 'qc_flaeche_val' not in st.session_state: st.session_state.qc_flaeche_val = 75
@@ -50,7 +49,6 @@ if 'opt_hausgeld_val' not in st.session_state: st.session_state.opt_hausgeld_val
 if 'opt_sollmiete_val' not in st.session_state: st.session_state.opt_sollmiete_val = 0
 if 'opt_grundstueck_val' not in st.session_state: st.session_state.opt_grundstueck_val = 0
 
-# Unabhängige Speicher-Variablen gegen das Streamlit-Tab-Clearing
 if 's_adresse' not in st.session_state: st.session_state.s_adresse = "Marienplatz 1, 80331 München"
 if 's_baujahr' not in st.session_state: st.session_state.s_baujahr = 1975
 if 's_gnd' not in st.session_state: st.session_state.s_gnd = 80
@@ -258,7 +256,7 @@ with st.sidebar:
             min_value=1, max_value=100, 
             value=int(st.session_state.rnd_kalibriert), 
             key="rnd_widget_input",
-            help="Der wirtschaftliche Lebenszyklus des Gebäudes. Wichtig für die Bestimmung des Ertragswert-Vervielfältigers (RBF)."
+            help="Der wirtschaftliche Lebenszyklus des Gebäudes. Wichtig für die Bestimmung des Ertragswert-Vervielfältigers (RBF).\n\nWo zu finden? Entnimmt man dem Verkehrswertgutachten. Kann andernfalls in Kapitel 2 über das integrierte Modernisierungs-Panel präzise hergeleitet werden."
         )
         st.session_state.rnd_kalibriert = rnd_eingabe_sidebar
         st.write(f"Aktueller Bodenwert: **{st.session_state.bodenrichtwert_api} €/m²**")
@@ -266,34 +264,48 @@ with st.sidebar:
     else:
         menue = "Exposé Quick Check"
 
-    with st.expander("⚖️ Hinweise & Impressum"):
-        st.markdown(f"""<div class='legal-text'><b>Anbieterkennzeichnung:</b><br>YieldBase Framework<br>München, Deutschland</div>""", unsafe_allow_html=True)
+    with st.expander("⚖️ Rechtliche Hinweise & Impressum"):
+        st.markdown(f"""
+        <div class='legal-text'>
+        <b>Anbieterkennzeichnung gem. § 5 DDG:</b><br>
+        YieldBase Analytics & Systems<br>
+        Privates Analyse-Framework<br>
+        München, Deutschland<br><br>
+        <b>Urheberrecht & Urheberrechtsschutz:</b><br>
+        © {current_year} YieldBase. Alle Rechte vorbehalten. Die Softwarearchitektur, das visuelle Interface-Design sowie sämtliche zugrundeliegenden Berechnungsalgorithmen sind geschützt (§ 2, § 69a ff. UrhG). Jede unbefugte Vervielfältigung, Verbreitung oder Modifikation ist untersagt.<br><br>
+        <b>Datenschutz gem. DSGVO:</b><br>
+        Dieses Webtool speichert keine personenbezogenen Daten auf externen Servern. Eingegebene Adressdaten werden verschlüsselt (SSL) an OpenStreetMap übertragen.
+        </div>
+        """, unsafe_allow_html=True)
+        
+    st.markdown(f"<div class='sidebar-branding'>Developed by YieldBase</div>", unsafe_allow_html=True)
 
 # --- 4. MAIN CONTENT ---
 if menue == "Exposé Quick Check":
     st.image("https://images.unsplash.com/photo-1460925895917-afdab827c52f?ixlib=rb-4.0.3&auto=format&fit=crop&w=1600&h=400&q=80", use_container_width=True)
     st.title("Exposé Quick Check")
+    st.markdown("Analysieren Sie Online-Angebote von Immobilienscout24 & Co. innerhalb von 60 Sekunden. Das System nutzt intelligente Voreinstellungen für unvollständige Daten.")
     st.divider()
     
     col_q1, col_q2 = st.columns(2, gap="large")
     with col_q1:
-        qc_preis = st.number_input("Kaufpreis laut Exposé (€)", min_value=0, value=int(st.session_state.qc_preis_val), step=10000, key="qc_p_widget", on_change=lambda: setattr(st.session_state, 'qc_preis_val', st.session_state.qc_p_widget))
-        qc_miete = st.number_input("Monatliche Ist-Kaltmiete (€)", min_value=0, value=int(st.session_state.qc_miete_val), step=50, key="qc_m_widget", on_change=lambda: setattr(st.session_state, 'qc_miete_val', st.session_state.qc_m_widget))
+        qc_preis = st.number_input("Kaufpreis laut Exposé (€)", min_value=0, value=int(st.session_state.qc_preis_val), step=10000, key="qc_p_widget", on_change=lambda: setattr(st.session_state, 'qc_preis_val', st.session_state.qc_p_widget), help="Der nackte Brutto-Verkaufspreis des Objekts ohne Nebenkosten.\n\nWo zu finden? Direkt auf der Startseite des Online-Inserats oder auf Seite 1 des Maklerexposés.")
+        qc_miete = st.number_input("Monatliche Ist-Kaltmiete (€)", min_value=0, value=int(st.session_state.qc_miete_val), step=50, key="qc_m_widget", on_change=lambda: setattr(st.session_state, 'qc_miete_val', st.session_state.qc_m_widget), help="Die aktuell vom Mieter gezahlte Nettokaltmiete pro Monat (ohne Heiz- und Betriebskosten).\n\nWo zu finden? Im Fließtext des Inserats unter 'Mieteinnahmen' oder direkt im aktuellen Mietvertrag.")
     with col_q2:
-        qc_flaeche = st.number_input("Wohnfläche (m²)", min_value=1, value=int(st.session_state.qc_flaeche_val), step=5, key="qc_f_widget", on_change=lambda: setattr(st.session_state, 'qc_flaeche_val', st.session_state.qc_f_widget))
-        qc_knk = st.slider("Kaufnebenkosten-Schätzung (%)", 5.0, 15.0, value=float(st.session_state.qc_knk_val), step=0.5, key="qc_k_widget", on_change=lambda: setattr(st.session_state, 'qc_knk_val', st.session_state.qc_k_widget))
+        qc_flaeche = st.number_input("Wohnfläche (m²)", min_value=1, value=int(st.session_state.qc_flaeche_val), step=5, key="qc_f_widget", on_change=lambda: setattr(st.session_state, 'qc_flaeche_val', st.session_state.qc_f_widget), help="Die reine nach WoFlV anrechenbare Wohnfläche des Objekts.\n\nWo zu finden? Im Inserats-Steckbrief, in der Wohnflächenberechnung des Architekten oder dem Mietvertrag.")
+        qc_knk = st.slider("Kaufnebenkosten-Schätzung (%)", 5.0, 15.0, value=float(st.session_state.qc_knk_val), step=0.5, key="qc_k_widget", on_change=lambda: setattr(st.session_state, 'qc_knk_val', st.session_state.qc_k_widget), help="Summe aus Grunderwerbsteuer (je nach Bundesland 3.5% bis 6.5%), Notar-/Gerichtskosten (ca. 1.5% - 2%) und optionaler Maklerprovision.")
 
-    with st.expander("➕ Optionale Exposé-Angaben", expanded=True):
+    with st.expander("➕ Optionale Exposé-Angaben hinzufügen (Überschreibt Erfahrungswerte)", expanded=True):
         col_o1, col_o2 = st.columns(2)
         with col_o1:
-            opt_hausgeld = st.number_input("Hausgeld / nicht umlegbare OpEx (€/Monat)", min_value=0, value=int(st.session_state.opt_hausgeld_val), step=10, key="opt_h_widget", on_change=lambda: setattr(st.session_state, 'opt_hausgeld_val', st.session_state.opt_h_widget))
-            opt_sollmiete = st.number_input("Soll-Miete / Mietpotenzial p.a. (€)", min_value=0, value=int(st.session_state.opt_sollmiete_val), step=500, key="opt_s_widget", on_change=lambda: setattr(st.session_state, 'opt_sollmiete_val', st.session_state.opt_s_widget))
+            opt_hausgeld = st.number_input("Tatsächliches Hausgeld / nicht umlegbare OpEx (€/Monat)", min_value=0, value=int(st.session_state.opt_hausgeld_val), step=10, key="opt_h_widget", on_change=lambda: setattr(st.session_state, 'opt_hausgeld_val', st.session_state.opt_h_widget), help="Die monatlichen Kosten für Verwaltung und Instandhaltungsrücklage, die nicht auf den Mieter umgelegt werden können.\n\nWo zu finden? Im Maklerexposé oder gezielt anzufordern über die 'Einzelabrechnung des letzten Wirtschaftsjahres'.")
+            opt_sollmiete = st.number_input("Soll-Miete / Mietpotenzial p.a. (€)", min_value=0, value=int(st.session_state.opt_sollmiete_val), step=500, key="opt_s_widget", on_change=lambda: setattr(st.session_state, 'opt_sollmiete_val', st.session_state.opt_s_widget), help="Die realistische Marktmiete pro Jahr bei Neuvermietung oder Ausnutzung von Staffelmieten.\n\nWo zu finden? Lässt sich über den örtlichen Mietspiegel der Gemeinde oder eine Mietdatenbank-Abfrage ermitteln.")
         with col_o2:
-            opt_grundstueck = st.number_input("Grundstücksfläche (m²)", min_value=0, value=int(st.session_state.opt_grundstueck_val), step=50, key="opt_g_widget", on_change=lambda: setattr(st.session_state, 'opt_grundstueck_val', st.session_state.opt_g_widget))
+            opt_grundstueck = st.number_input("Grundstücksfläche (m²)", min_value=0, value=int(st.session_state.opt_grundstueck_val), step=50, key="opt_g_widget", on_change=lambda: setattr(st.session_state, 'opt_grundstueck_val', st.session_state.opt_g_widget), help="Die absolute Quadratmetergröße des zugehörigen Grund und Bodens. Wichtig für die Substanzwerttrennung.\n\nWo zu finden? Im Inseratstext, dem amtlichen Lageplan oder im Bestandsverzeichnis du Grundbuchauszugs.")
 
     if st.button("Exposé-Schnellprüfung ausführen", type="primary"):
         if qc_preis <= 0 or qc_miete <= 0:
-            st.error("❌ Kaufpreis und monatliche Kaltmiete müssen größer als 0 sein.")
+            st.error("❌ **Eingabefehler:** Kaufpreis und monatliche Kaltmiete müssen größer als 0 sein, um eine Analyse durchzuführen.")
         else:
             jahresmiete = (opt_sollmiete if opt_sollmiete > 0 else qc_miete * 12)
             reinertrag_jahr = jahresmiete - (opt_hausgeld * 12) if opt_hausgeld > 0 else jahresmiete * (1 - (default_bew / 100))
@@ -312,13 +324,30 @@ if menue == "Exposé Quick Check":
             c1.metric("Kaufpreisfaktor", f"{faktor:.1f} x")
             c2.metric("Bruttorendite p.a.", f"{bruttorendite:.2f} %")
             c3.metric("Quadratmeterpreis", f"{quadratmeterpreis:,.0f} €/m²".replace(",", "."))
+            
+            st.divider()
+            st.markdown("### Deal-Rating")
+            col_a1, col_a2 = st.columns(2)
+            with col_a1:
+                if faktor <= 22: st.markdown("<div class='indicator-card indicator-green'>🟢 ATTRAKTIVER EINSTIEGPREIS</div>", unsafe_allow_html=True)
+                elif faktor <= 28: st.markdown("<div class='indicator-card indicator-yellow'>🟡 MARKTÜBLICHER BESTANDSWERT</div>", unsafe_allow_html=True)
+                else: st.markdown("<div class='indicator-card indicator-red'>🔴 EXPANSIVER SPEKULATIONSPREIS</div>", unsafe_allow_html=True)
+            with col_a2:
+                if simulierter_cashflow_monat >= 50: st.markdown("<div class='indicator-card indicator-green'>🟢 POSITIVER CASHFLOW (EST.)</div>", unsafe_allow_html=True)
+                elif simulierter_cashflow_monat >= -50: st.markdown("<div class='indicator-card indicator-yellow'>🟡 CASHFLOW-NEUTRAL (EST.)</div>", unsafe_allow_html=True)
+                else: st.markdown("<div class='indicator-card indicator-red'>🔴 NEGATIVE LIQUIDITÄTS-BELASTUNG</div>", unsafe_allow_html=True)
+            
+            st.markdown("<div class='benchmark-card'><div class='benchmark-title'>💡 Quick Check Ergebnis-Audit & Benchmark</div>"
+                        f"<div class='benchmark-text'><b>Was bedeuten diese Zahlen für Sie?</b><br>"
+                        f"Ein Kaufpreisfaktor von <b>{faktor:.1f}x</b> bedeutet, dass die Immobilie {faktor:.1f} Jahre benötigt, um ihre Kosten rein über die Miete abzubezahlen. Im aktuellen Zinsumfeld gilt: Faktoren unter 22x finanzieren sich oft von selbst. Werte über 28x sind riskant, da die Miete die hohen Zinsen der Bank nicht decken kann.<br><br>"
+                        f"<b>Markt-Benchmark:</b> In deutschen B- und C-Lagen liegt der Schnitt aktuell bei 21x bis 25x. In A-Metropolen werden oft Faktoren von 28x bis 33x verlangt, was für Kleinanleger ohne massives Eigenkapital ein monatliches Zuzahlungsgeschäft bedeutet.</div></div>", unsafe_allow_html=True)
 
 elif "1. Standort & Mikrolage" in menue:
     st.image("https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?ixlib=rb-4.0.3&auto=format&fit=crop&w=1600&h=400&q=80", use_container_width=True)
     st.title("Premium Valuation: 1. Standort & Mikrolage")
     st.divider()
     
-    adresse = st.text_input("Vollständige Objektadresse", value=st.session_state.s_adresse, key="adr_w", on_change=lambda: setattr(st.session_state, 's_adresse', st.session_state.adr_w))
+    adresse = st.text_input("Vollständige Objektadresse", value=st.session_state.s_adresse, key="adr_w", on_change=lambda: setattr(st.session_state, 's_adresse', st.session_state.adr_w), help="Straße, Hausnummer, PLZ und Ort der Immobilie.\n\nWo zu finden? Im Exposé, Makleranschreiben oder Kaufvertragsentwurf. Zwingend notwendig für die exakte Georeferenzierung auf der Karte.")
     
     if st.button("Standortdaten & BRW abrufen", type="primary"):
         lat_fallback, lon_fallback = 48.137, 11.575
@@ -333,6 +362,11 @@ elif "1. Standort & Mikrolage" in menue:
         st.session_state.bodenrichtwert_api = brw_api_ergebnis
         st.success(f"**Verifiziert:** Der amtliche Bodenrichtwert beträgt **{brw_api_ergebnis} €/m²**.")
         st.map(pd.DataFrame({'lat': [lat_final], 'lon': [lon_final]}), zoom=15)
+        
+        st.markdown("<div class='benchmark-card'><div class='benchmark-title'>🏢 Standort & Bodenrichtwert Audit</div>"
+                    f"<div class='benchmark-text'><b>Was bedeutet diese Zahl für Sie?</b><br>"
+                    f"Der Bodenrichtwert von <b>{brw_api_ergebnis} €/m²</b> ist der aus der Geonormierung abgeleitete Durchschnittswert für den nackten Boden in dieser Mikrolage. Er basiert auf der regionalen PLZ-Datenbank und schützt vor ungenauen Pauschalannahmen.<br><br>"
+                    f"<b>Markt-Benchmark:</b> Im direkten Münchner Speckgürtel werden regelhaft Werte von 1.500 € bis über 3.500 €/m² aufgerufen. Ländliche Regionen liegen oft bei 80 € bis 250 €/m². Je höher der reine Bodenwertanteil am Gesamtkaufpreis ist, desto krisensicherer ist das Sachwert-Fundament des Investments.</div></div>", unsafe_allow_html=True)
 
 elif "2. Substanz & RND" in menue:
     st.image("https://images.unsplash.com/photo-1503387762-592deb58ef4e?ixlib=rb-4.0.3&auto=format&fit=crop&w=1600&h=400&q=80", use_container_width=True)
@@ -340,8 +374,8 @@ elif "2. Substanz & RND" in menue:
     st.divider()
     
     col_b1, col_b2 = st.columns(2, gap="large")
-    with col_b1: baujahr = st.number_input("Errichtungsjahr", min_value=1800, max_value=current_year, value=int(st.session_state.s_baujahr), key="bj_w", on_change=lambda: setattr(st.session_state, 's_baujahr', st.session_state.bj_w))
-    with col_b2: gnd = st.number_input("Gesamtnutzungsdauer (GND)", min_value=40, max_value=100, value=int(st.session_state.s_gnd), key="gnd_w", on_change=lambda: setattr(st.session_state, 's_gnd', st.session_state.gnd_w))
+    with col_b1: baujahr = st.number_input("Errichtungsjahr", min_value=1800, max_value=current_year, value=int(st.session_state.s_baujahr), key="bj_w", on_change=lambda: setattr(st.session_state, 's_baujahr', st.session_state.bj_w), help="Das ursprüngliche Baujahr des Gebäudes laut Bauakte.\n\nWo zu finden? Im Energieausweis, der Baubeschreibung oder der Brandversicherungsurkunde.")
+    with col_b2: gnd = st.number_input("Gesamtnutzungsdauer (GND)", min_value=40, max_value=100, value=int(st.session_state.s_gnd), key="gnd_w", on_change=lambda: setattr(st.session_state, 's_gnd', st.session_state.gnd_w), help="Die theoretische maximale Nutzungsdauer einer Immobilie bei normaler Instandhaltung laut ImmoWertV.\n\nWo zu finden? Für Wohngebäude gesetzlich starr auf 80 Jahre normiert.")
     
     alter = current_year - baujahr
     basis_rnd = max(0, gnd - alter)
@@ -349,12 +383,12 @@ elif "2. Substanz & RND" in menue:
     st.markdown("#### Modernisierungs-Punkte (Werttreiber)")
     col5, col6 = st.columns(2, gap="large")
     with col5:
-        dach = st.slider("Dach & Fassade", 0, 4, value=int(st.session_state.s_mod_dach), key="d_w", on_change=lambda: setattr(st.session_state, 's_mod_dach', st.session_state.d_w))
-        fenster = st.slider("Fenster & Türen", 0, 4, value=int(st.session_state.s_mod_fenster), key="fe_w", on_change=lambda: setattr(st.session_state, 's_mod_fenster', st.session_state.fe_w))
-        huge_hz = st.slider("Wärmeerzeugung", 0, 4, value=int(st.session_state.s_mod_hz), key="hz_w", on_change=lambda: setattr(st.session_state, 's_mod_hz', st.session_state.hz_w))
+        dach = st.slider("Dach & Fassade", 0, 4, value=int(st.session_state.s_mod_dach), key="d_w", on_change=lambda: setattr(st.session_state, 's_mod_dach', st.session_state.d_w), help="0 = Sanierungsstau, 4 = Vollständig gedämmt und neu eingedeckt in den letzten 5 Jahren.")
+        fenster = st.slider("Fenster & Türen", 0, 4, value=int(st.session_state.s_mod_fenster), key="fe_w", on_change=lambda: setattr(st.session_state, 's_mod_fenster', st.session_state.fe_w), help="0 = Alte Doppelverglasung, 4 = Moderne 3-fach Isolierverglasung nach GEG.")
+        huge_hz = st.slider("Wärmeerzeugung", 0, 4, value=int(st.session_state.s_mod_hz), key="hz_w", on_change=lambda: setattr(st.session_state, 's_mod_hz', st.session_state.hz_w), help="0 = Alte Gastherme, 4 = Moderne Wärmepumpe oder Fernwärmeanschluss.")
     with col6:
-        sanitaer = st.slider("Sanitärbereiche", 0, 4, value=int(st.session_state.s_mod_sanitaer), key="sa_w", on_change=lambda: setattr(st.session_state, 's_mod_sanitaer', st.session_state.sa_w))
-        innen = st.slider("Innenausbau", 0, 4, value=int(st.session_state.s_mod_innen), key="in_w", on_change=lambda: setattr(st.session_state, 's_mod_innen', st.session_state.in_w))
+        sanitaer = st.slider("Sanitärbereiche", 0, 4, value=int(st.session_state.s_mod_sanitaer), key="sa_w", on_change=lambda: setattr(st.session_state, 's_mod_sanitaer', st.session_state.sa_w), help="0 = Stand 70er Jahre, 4 = Luxussanierung inklusive aller Rohre und Steigleitungen.")
+        innen = st.slider("Innenausbau", 0, 4, value=int(st.session_state.s_mod_innen), key="in_w", on_change=lambda: setattr(st.session_state, 's_mod_innen', st.session_state.in_w), help="0 = Abgewohnt, 4 = Neue Böden, glatte Wände und komplett erneuerte Elektrik (FI-Schalter).")
         
     gesamtpunkte = dach + fenster + huge_hz + sanitaer + innen
     grad, zusatz_jahre = berechne_modernisierungsgrad(gesamtpunkte)
@@ -364,6 +398,11 @@ elif "2. Substanz & RND" in menue:
     if st.button("Restnutzungsdauer kalibrieren", type="primary"):
         st.session_state.rnd_kalibriert = neue_rnd
         st.rerun()
+        
+    st.markdown("<div class='benchmark-card'><div class='benchmark-title'>🛠️ Restnutzungsdauer (RND) Audit</div>"
+                f"<div class='benchmark-text'><b>Was bedeutet diese Zahl für Sie?</b><br>"
+                f"Die RND drückt aus, wie lange das Gebäude ohne tiefgreifende Kernsanierung noch wirtschaftlich Erträge erwirtschaften kann. Jede gezielte Modernisierung verlängert diesen Zeitraum und hebt den Ertragswertfaktor.<br><br>"
+                f"<b>Markt-Benchmark:</b> Banken fordern für langfristige Finanzierungen standardmäßig eine RND von mindestens 25 bis 30 Jahren. Fällt der Wert darunter, drohen erhebliche Risikoaufschläge beim Kreditzins.</div></div>", unsafe_allow_html=True)
 
 elif "3. Ertragswert (ImmoWertV)" in menue:
     st.image("https://images.unsplash.com/photo-1554469384-e58fac16e23a?ixlib=rb-4.0.3&auto=format&fit=crop&w=1600&h=400&q=80", use_container_width=True)
@@ -372,11 +411,11 @@ elif "3. Ertragswert (ImmoWertV)" in menue:
     
     col_a, col_b = st.columns(2, gap="large")
     with col_a:
-        miete = st.number_input("Jahresnettokaltmiete (Ist-Miete €)", min_value=0, value=int(st.session_state.s_ew_miete), key="ew_m_w", on_change=lambda: setattr(st.session_state, 's_ew_miete', st.session_state.ew_m_w))
-        bew_kosten = st.slider("Bewirtschaftungskosten (%)", 0.0, 40.0, value=float(st.session_state.s_ew_bew), key="ew_b_w", on_change=lambda: setattr(st.session_state, 's_ew_bew', st.session_state.ew_b_w))
-        zins = st.number_input("Liegenschaftszins p.a. (%)", min_value=0.1, max_value=15.0, value=float(st.session_state.s_ew_zins), step=0.1, key="ew_z_w", on_change=lambda: setattr(st.session_state, 's_ew_zins', st.session_state.ew_z_w))
+        miete = st.number_input("Jahresnettokaltmiete (Ist-Miete €)", min_value=0, value=int(st.session_state.s_ew_miete), key="ew_m_w", on_change=lambda: setattr(st.session_state, 's_ew_miete', st.session_state.ew_m_w), help="Die annualisierte Kaltmiete des Objekts.\n\nWo zu finden? In der letzten Mietaufstellung der Hausverwaltung oder direkt im Mietvertrag.")
+        bew_kosten = st.slider("Bewirtschaftungskosten (%)", 0.0, 40.0, value=float(st.session_state.s_ew_bew), key="ew_b_w", on_change=lambda: setattr(st.session_state, 's_ew_bew', st.session_state.ew_b_w), help="Prozentualer Abschlag für Verwaltung, nicht umlegbare Betriebskosten und Mietausfallwagnis.\n\nWo zu finden? Real aus der Hausgeldabrechnung entnehmen (Standard im Markt sind ca. 15-20%).")
+        zins = st.number_input("Liegenschaftszins p.a. (%)", min_value=0.1, max_value=15.0, value=float(st.session_state.s_ew_zins), step=0.1, key="ew_z_w", on_change=lambda: setattr(st.session_state, 's_ew_zins', st.session_state.ew_z_w), help="Der Zinssatz, mit dem der Verkehrswert von Immobilien marktüblich verzinst wird.\n\nWo zu finden? Wird im jährlichen Marktbericht des örtlichen Gutachterausschusses publiziert.")
     with col_b:
-        flaeche = st.number_input("Grundstücksfläche (m²)", min_value=0, value=int(st.session_state.s_ew_flaeche), step=50, key="ew_f_w", on_change=lambda: setattr(st.session_state, 's_ew_flaeche', st.session_state.ew_f_w))
+        flaeche = st.number_input("Grundstücksfläche (m²)", min_value=0, value=int(st.session_state.s_ew_flaeche), step=50, key="ew_f_w", on_change=lambda: setattr(st.session_state, 's_ew_flaeche', st.session_state.ew_f_w), help="Die exakte Grundstücksgröße des Areals.\n\nWo zu finden? Im amtlichen Grundbuchauszug im Bestandsverzeichnis.")
         brw = st.number_input("Bodenrichtwert (€/m²)", min_value=0, value=int(st.session_state.bodenrichtwert_api), step=10)
         
     if st.button("Ertragswert generieren", type="primary"):
@@ -387,12 +426,18 @@ elif "3. Ertragswert (ImmoWertV)" in menue:
         
     if st.session_state.ertragswert_ergebnis:
         res = st.session_state.ertragswert_ergebnis
-        if res['reinertrag'] < 0: st.warning(f"⚠️ **Gebäudereinertrag negativ:** Bodenwert zu hoch für die Ertragskraft.")
+        if res['reinertrag'] < 0: 
+            st.warning(f"⚠️ **Achtung (Bodenwert frisst Ertrag):** Der kalkulierte Gebäudereinertrag ist negativ ({res['reinertrag']:,.2f} €). Der Bodenwertanteil wurde genullt.".replace(",", "."))
         st.markdown("### Bewertungs-Ergebnis")
         c1, c2, c3 = st.columns(3)
         c1.metric("Kapitalisierungsfaktor", res['rbf'])
         c2.metric("Bodenwertanteil", f"{res['boden']:,.0f} €".replace(",", "."))
         c3.metric("Vorläufiger Ertragswert", f"{res['gesamt']:,.0f} €".replace(",", "."))
+        
+        st.markdown("<div class='benchmark-card'><div class='benchmark-title'>⚖️ Ertragswert & Liegenschaftszins Audit</div>"
+                    f"<div class='benchmark-text'><b>Was bedeutet diese Zahl für Sie?</b><br>"
+                    f"Der berechnete Ertragswert spiegelt den reinen, finanzmathematischen Wert der Immobilie basierend auf ihren Erträgen wider.<br><br>"
+                    f"<b>Markt-Benchmark:</b> Je niedriger der Liegenschaftszins ist (z.B. 2.5% in Top-Metropolen), desto teurer und begehrter ist der Standort. Liegt der aufgerufene Kaufpreis des Maklers deutlich über dem hier ermittelten Ertragswert, zahlen Sie einen spekulativen Aufpreis.</div></div>", unsafe_allow_html=True)
 
 elif "4. Sachwert (ImmoWertV)" in menue:
     st.image("https://images.unsplash.com/photo-1504307651254-35680f356dfd?ixlib=rb-4.0.3&auto=format&fit=crop&w=1600&h=400&q=80", use_container_width=True)
@@ -401,16 +446,16 @@ elif "4. Sachwert (ImmoWertV)" in menue:
         
     col_s1, col_s2 = st.columns(2, gap="large")
     with col_s1:
-        bgf = st.number_input("Bruttogrundfläche (BGF m²)", min_value=0, value=int(st.session_state.s_sw_bgf), step=10, key="sw_bgf_w", on_change=lambda: setattr(st.session_state, 's_sw_bgf', st.session_state.sw_bgf_w))
+        bgf = st.number_input("Bruttogrundfläche (BGF m²)", min_value=0, value=int(st.session_state.s_sw_bgf), step=10, key="sw_bgf_w", on_change=lambda: setattr(st.session_state, 's_sw_bgf', st.session_state.sw_bgf_w), help="Die Summe der Außenmaße aller Grundrissebenen des Gebäudes.\n\nWo zu finden? In den Architektenplänen oder der offiziellen Kubaturberechnung des Bauantrags.")
         gnd_eingabe = st.number_input("Gesamtnutzungsdauer (GND)", min_value=40, max_value=100, value=int(st.session_state.s_sw_gnd), step=10, key="sw_gnd_w", on_change=lambda: setattr(st.session_state, 's_sw_gnd', st.session_state.sw_gnd_w))
-        nhk = st.number_input("Normalherstellungskosten (€/m²)", min_value=500, value=int(st.session_state.s_sw_nhk), step=50, key="sw_nhk_w", on_change=lambda: setattr(st.session_state, 's_sw_nhk', st.session_state.sw_nhk_w))
+        nhk = st.number_input("Normalherstellungskosten (€/m²)", min_value=500, value=int(st.session_state.s_sw_nhk), step=50, key="sw_nhk_w", on_change=lambda: setattr(st.session_state, 's_sw_nhk', st.session_state.sw_nhk_w), help="Die standardisierten Neubaukosten pro m² BGF bezogen auf das Basisjahr 2010 (NHK 2010).\n\nWo zu finden? Festgelegt in den Tabellen der Sachwertrichtlinie des Bundes.")
     with col_s2:
-        bpi = st.number_input("Baupreisindex (Destatis)", min_value=50.0, value=float(st.session_state.s_sw_bpi), step=1.0, key="sw_bpi_w", on_change=lambda: setattr(st.session_state, 's_sw_bpi', st.session_state.sw_bpi_w))
-        regio = st.number_input("Regionaler Marktanpassungsfaktor", min_value=0.5, value=float(st.session_state.s_sw_regio), step=0.01, key="sw_reg_w", on_change=lambda: setattr(st.session_state, 's_sw_regio', st.session_state.sw_reg_w))
+        bpi = st.number_input("Baupreisindex (Destatis)", min_value=50.0, value=float(st.session_state.s_sw_bpi), step=1.0, key="sw_bpi_w", on_change=lambda: setattr(st.session_state, 's_sw_bpi', st.session_state.sw_bpi_w), help="Der aktuelle Faktor zur Anpassung der NHK 2010 an das heutige Preisniveau.\n\nWo zu finden? Wird vierteljährlich vom Statistischen Bundesamt (Destatis) publiziert.")
+        regio = st.number_input("Regionaler Marktanpassungsfaktor", min_value=0.5, value=float(st.session_state.s_sw_regio), step=0.01, key="sw_reg_w", on_change=lambda: setattr(st.session_state, 's_sw_regio', st.session_state.sw_reg_w), help="Gleicht das bundesweite Preisniveau an den lokalen Baumarkt an.\n\nWo zu finden? Wird im Bericht des lokalen Gutachterausschusses ausgewiesen.")
         boden = st.number_input("Bodenwert (€)", min_value=0, value=int(st.session_state.s_sw_boden), step=1000, key="sw_bod_w", on_change=lambda: setattr(st.session_state, 's_sw_boden', st.session_state.sw_bod_w))
     
     st.divider()
-    swf = st.number_input("Sachwertfaktor (Marktanpassung)", min_value=0.1, max_value=2.0, value=float(st.session_state.s_sw_swf), step=0.05, key="sw_swf_w", on_change=lambda: setattr(st.session_state, 's_sw_swf', st.session_state.sw_swf_w))
+    swf = st.number_input("Sachwertfaktor (Marktanpassung)", min_value=0.1, max_value=2.0, value=float(st.session_state.s_sw_swf), step=0.05, key="sw_swf_w", on_change=lambda: setattr(st.session_state, 's_sw_swf', st.session_state.sw_swf_w), help="Der finale Multiplikator, um den reinen Substanzwert an den realen Markt anzupassen.\n\nWo zu finden? Aus den Marktberichten des Gutachterausschusses der jeweiligen Region.")
         
     if st.button("Substanzwert berechnen", type="primary"):
         awm_prozent = berechne_awm(st.session_state.rnd_kalibriert, gnd_eingabe)
@@ -427,6 +472,11 @@ elif "4. Sachwert (ImmoWertV)" in menue:
         c1.metric("Vorläufiger Sachwert", f"{res['vor_sw']:,.0f} €".replace(",", "."))
         c2.metric(f"Alterswertminderung", f"{res['awm']} %")
         c3.metric("Markt-Sachwert (Marktangepasst)", f"{res['gesamt']:,.0f} €".replace(",", "."))
+        
+        st.markdown("<div class='benchmark-card'><div class='benchmark-title'>🧱 Sachwert & Substanz Audit</div>"
+                    f"<div class='benchmark-text'><b>Was bedeutet diese Zahl für Sie?</b><br>"
+                    f"Der Sachwert beziffert den reinen Substanz- und Materialwert (Boden + Herstellungskosten minus Alterung).<br><br>"
+                    f"<b>Markt-Benchmark:</b> Während bei selbstgenutzten Objekten der Sachwert dominiert, ist er bei Renditeobjekten zweitrangig. Weicht der Sachwert stark nach unten vom Kaufpreis ab, zahlen Sie einen extrem spekulativen Lage- oder Knappheitsaufschlag.</div></div>", unsafe_allow_html=True)
 
 elif "5. Cashflow & Leverage Engine" in menue:
     st.image("https://images.unsplash.com/photo-1460925895917-afdab827c52f?ixlib=rb-4.0.3&auto=format&fit=crop&w=1600&h=400&q=80", use_container_width=True)
@@ -442,16 +492,19 @@ elif "5. Cashflow & Leverage Engine" in menue:
         bew_kosten = st.slider("OpEx / Bewirtschaftung (%)", 0.0, 30.0, value=float(st.session_state.s_le_bew), step=1.0, key="le_b_w", on_change=lambda: setattr(st.session_state, 's_le_bew', st.session_state.le_b_w))
     with col_r2:
         st.markdown("#### Debt / Fremdkapital")
-        ek = st.slider("Eigenkapital-Quote (%)", 10.0, 100.0, value=float(st.session_state.s_le_ek), step=1.0, key="le_ek_w", on_change=lambda: setattr(st.session_state, 's_le_ek', st.session_state.le_ek_w))
-        zins = st.number_input("Fremdkapitalzins p.a. (%)", min_value=0.1, max_value=10.0, value=float(st.session_state.s_le_zins), step=0.1, key="le_z_w", on_change=lambda: setattr(st.session_state, 's_le_zins', st.session_state.le_z_w))
-        tilgung = st.number_input("Tilgungssatz p.a. (%)", min_value=0.0, max_value=10.0, value=float(st.session_state.s_le_tilgung), step=0.1, key="le_t_w", on_change=lambda: setattr(st.session_state, 's_le_tilgung', st.session_state.le_t_w))
+        ek = st.slider("Eigenkapital-Quote (%)", 10.0, 100.0, value=float(st.session_state.s_le_ek), step=1.0, key="le_ek_w", on_change=lambda: setattr(st.session_state, 's_le_ek', st.session_state.le_ek_w), help="Der prozentuale Anteil der Gesamtkosten, den du aus eigenen liquiden Mitteln einbringst.")
+        zins = st.number_input("Fremdkapitalzins p.a. (%)", min_value=0.1, max_value=10.0, value=float(st.session_state.s_le_zins), step=0.1, key="le_z_w", on_change=lambda: setattr(st.session_state, 's_le_zins', st.session_state.le_z_w), help="Der Sollzinssatz der Bank für das Immobiliendarlehen.\n\nWird hier automatisch an das gewählte Asset-Szenario gekoppelt.")
+        tilgung = st.number_input("Tilgungssatz p.a. (%)", min_value=0.0, max_value=10.0, value=float(st.session_state.s_le_tilgung), step=0.1, key="le_t_w", on_change=lambda: setattr(st.session_state, 's_le_tilgung', st.session_state.le_t_w), help="Die anfängliche jährliche Rückzahlung des Darlehens (Standard: 1.5% - 2%).")
     with col_r3:
-        st.info(f"💡 **Asset-Szenario:** Abschreibungen basieren auf {immo_zustand}.")
+        if immo_zustand == "Denkmalschutz / Sanierung":
+            st.warning("⚡ **Denkmal-Modus aktiv:** Das System hat das Profi-Steuerpanel unten automatisch für die Sanierungs-AfA nach § 7i EStG freigeschaltet!")
+        else:
+            st.info(f"💡 **Asset-Szenario:** Berechnungen basieren auf den gesetzlichen Abschreibungssätzen für {immo_zustand}.")
 
-    with st.expander("⚙️ Tax & Compliance Engine", expanded=True):
+    with st.expander("⚙️ Tax & Compliance Engine (AfA / Steuern)", expanded=True):
         col_p1, col_p2, col_p3 = st.columns(3)
-        with col_p1: steuersatz = st.slider("Persönlicher Grenzsteuersatz (%)", 0, 45, value=int(st.session_state.s_le_steuersatz), key="le_st_w", on_change=lambda: setattr(st.session_state, 's_le_steuersatz', st.session_state.le_st_w))
-        with col_p2: gebaeudeanteil = st.slider("Gebäudeanteil (%)", 0, 100, value=int(st.session_state.s_le_gebaeudeanteil), key="le_ga_w", on_change=lambda: setattr(st.session_state, 's_le_gebaeudeanteil', st.session_state.le_ga_w))
+        with col_p1: steuersatz = st.slider("Persönlicher Grenzsteuersatz (%)", 0, 45, value=int(st.session_state.s_le_steuersatz), key="le_st_w", on_change=lambda: setattr(st.session_state, 's_le_steuersatz', st.session_state.le_st_w), help="Dein individueller Steuersatz auf den jeweils nächsten Euro Einkommen. Wichtig für die Wirkung des Steuerschilds.")
+        with col_p2: gebaeudeanteil = st.slider("Gebäudeanteil (%)", 0, 100, value=int(st.session_state.s_le_gebaeudeanteil), key="le_ga_w", on_change=lambda: setattr(st.session_state, 's_le_gebaeudeanteil', st.session_state.le_ga_w), help="Der prozentuale Wertanteil des reinen Gebäudes an den Gesamtkosten, da Grund und Boden nicht abgeschrieben werden können.")
         with col_p3: 
             is_denkmal = (immo_zustand == "Denkmalschutz / Sanierung")
             if is_denkmal:
@@ -463,17 +516,41 @@ elif "5. Cashflow & Leverage Engine" in menue:
                 afa_regulaer_satz = st.number_input("Reguläre Gebäude-AfA (%)", min_value=0.0, max_value=15.0, value=float(st.session_state.s_le_reg_afa), step=0.5, key="le_ra_w", on_change=lambda: setattr(st.session_state, 's_le_reg_afa', st.session_state.le_ra_w))
 
     if st.button("Cashflow-Modell generieren", type="primary"):
-        res = berechne_rendite_pro(kaufpreis, knk, miete, bew_kosten, ek, zins, tilgung, steuersatz, afa_regulaer_satz, gebaeudeanteil, is_denkmal, denkmal_sanierungsanteil, afa_denkmal_satz)
-        st.session_state.rendite_ergebnis = res
+        if kaufpreis <= 0 or miete <= 0:
+            st.error("❌ **Berechnung unmöglich:** Bitte prüfen Sie Angebotspreis und Jahresmiete.")
+        else:
+            res = berechne_rendite_pro(kaufpreis, knk, miete, bew_kosten, ek, zins, tilgung, steuersatz, afa_regulaer_satz, gebaeudeanteil, is_denkmal, denkmal_sanierungsanteil, afa_denkmal_satz)
+            st.session_state.rendite_ergebnis = res
         
     if st.session_state.rendite_ergebnis:
         res = st.session_state.rendite_ergebnis
-        st.write("### Metriken & Prognose")
+        st.write("### 1. Performance-Metriken")
         c1, c2, c3, c4 = st.columns(4)
         c1.metric("Return on Equity (ROE)", f"{res['ek_rendite']} %")
-        c2.metric("True Cashflow (Post-Tax)", f"{res['cashflow_nach_steuer']:,.2f} €".replace(",", "."))
+        dscr = res['dscr']
+        if isinstance(dscr, float):
+            dscr_color = "🟢 Bankfähig" if dscr >= 1.2 else ("🟡 Restriktiv" if dscr >= 1.0 else "🔴 Hochrisiko")
+            c2.metric(f"Debt Service (DSCR)", f"{dscr} ({dscr_color})")
+        else: st.metric("DSCR", dscr)
         c3.metric("Netto-Mietrendite", f"{res['netto']} %")
         c4.metric("Kaufpreisfaktor", f"{res['faktor']} fach")
+
+        st.divider()
+        st.write("### 2. Liquiditäts-Prognose")
+        c5, c6, c7 = st.columns(3)
+        c5.metric("Free Cashflow (Pre-Tax)", f"{res['cashflow_monat']:,.2f} €".replace(",", "."))
+        steuer = res['steuerlast_jahr'] / 12
+        steuer_text = "Steuerlast p.M." if steuer > 0 else "Steuererstattung (Tax Shield) p.M."
+        c6.metric(steuer_text, f"{abs(steuer):,.2f} €".replace(",", "."))
+        cf_nach = res['cashflow_nach_steuer']
+        cf_color_nach = "🟢 Positiv" if cf_nach >= 0 else "🔴 Negativ"
+        c7.metric(f"True Cashflow (Post-Tax)", f"{cf_nach:,.2f} € ({cf_color_nach})".replace(",", "."))
+        
+        st.markdown("<div class='benchmark-card'><div class='benchmark-title'>🏦 Finanzierung, Steuern & DSCR Audit</div>"
+                    f"<div class='benchmark-text'><b>Was bedeuten diese Zahlen für Sie?</b><br>"
+                    f"• <b>True Cashflow (Post-Tax):</b> Zeigt an, was monatlich nach Zins, Tilgung und Steuer auf dem Konto landet.<br>"
+                    f"• <b>DSCR:</b> Verhältnis der Mieteinnahmen zur Bankrate. Ein DSCR von 1.20 bedeutet, dass die Miete 20% höher ist als die Kreditrate.<br><br>"
+                    f"<b>Markt-Benchmark:</b> Banken fordern für eine problemlose Vergabe strikt einen DSCR von mindestens <b>1.10 bis 1.15</b>. Liegt Ihr Wert unter 1.0, zahlt der Investor monatlich drauf.</div></div>", unsafe_allow_html=True)
 
 elif "6. Executive Pitch Deck" in menue:
     st.image("https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?ixlib=rb-4.0.3&auto=format&fit=crop&w=1600&h=400&q=80", use_container_width=True)
@@ -483,6 +560,34 @@ elif "6. Executive Pitch Deck" in menue:
     if not (st.session_state.ertragswert_ergebnis and st.session_state.sachwert_ergebnis and st.session_state.rendite_ergebnis):
         st.warning("⚠️ Der Report ist unvollständig. Bitte durchlaufen Sie die Pipeline (Schritte 3-5).")
     else:
-        ew = st.session_state.ertragswert_ergebnis; sw = st.session_state.sachwert_ergebnis
-        st.metric("Kalkulierter Ertragswert", f"{ew['gesamt']:,.0f} €".replace(",", "."))
-        st.metric("Kalkulierter Sachwert", f"{sw['gesamt']:,.0f} €".replace(",", "."))
+        ew = st.session_state.ertragswert_ergebnis; sw = st.session_state.sachwert_ergebnis; re = st.session_state.rendite_ergebnis
+        st.markdown("### Valuation-Profil (ImmoWertV)")
+        col_rep1, col_rep2 = st.columns(2, gap="large")
+        with col_rep1: st.metric("Kalkulierter Ertragswert", f"{ew['gesamt']:,.0f} €".replace(",", "."))
+        with col_rep2: st.metric("Kalkulierter Sachwert", f"{sw['gesamt']:,.0f} €".replace(",", "."))
+            
+        st.divider()
+        st.markdown("### Investment-Profil")
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Einstiegsfaktor", f"{re['faktor']} fach")
+        c2.metric("Nettorendite", f"{re['netto']} %")
+        c3.metric("Leveraged ROE", f"{re['ek_rendite']} %")
+        c4.metric("Bank-Rating (DSCR)", f"{re['dscr']}")
+        
+        st.divider()
+        st.markdown("### Liquiditäts-Profil")
+        c5, c6 = st.columns(2)
+        c5.metric("Operativer Cashflow (Pre-Tax)", f"{re['cashflow_monat']:,.2f} €".replace(",", "."))
+        c6.metric("Echter Portfolio-Cashflow (Post-Tax)", f"{re['cashflow_nach_steuer']:,.2f} €".replace(",", "."))
+        
+        st.markdown(f"""
+        <div class='legal-box'>
+            <div class='legal-text'>
+                <b>⚖️ RECHTLICHER DISCLAIMER & HAFTUNGSAUSSCHLUSS:</b><br>
+                Die von <i>YieldBase</i> generierten Ergebnisse stellen eine unverbindliche mathematische Modellsimulation dar und dienen ausschließlich der Orientierung. Sie ersetzen ausdrücklich keine rechtliche, steuerliche oder finanzielle Beratung.<br><br>
+                <b>📊 QUELLENANGABEN & PROPRIETÄRER SCHUTZHINWEIS:</b><br>
+                Berechnungsmethodik konform mit der Immobilienwertermittlungsverordnung (ImmoWertV). Indexierte Baukosten basieren auf Werten des Statistischen Bundesamtes (Destatis).<br><br>
+                <b>© {current_year} YieldBase. Alle Rechte vorbehalten.</b>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
