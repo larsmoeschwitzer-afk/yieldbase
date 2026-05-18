@@ -75,9 +75,6 @@ def berechne_ertragswert(miete_jahr, bewirtschaftung_prozent, flaeche, bodenrich
     reinertrag = miete_jahr - (miete_jahr * (bewirtschaftung_prozent / 100))
     bodenwertverzinsung = bodenwert * (liegenschaftszins / 100)
     gebaeude_reinertrag = reinertrag - bodenwertverzinsung
-    
-    # Mathematische Absicherung: Negativer Gebäudereinertrag wird für den reinen Ertragswert 
-    # nach ImmoWertV genullt, löst aber im UI eine Warnung aus.
     gebaeude_wert_anteil = max(0, gebaeude_reinertrag) * rbf
     return bodenwert + gebaeude_wert_anteil, bodenwert, gebaeude_reinertrag
 
@@ -128,12 +125,11 @@ def berechne_rendite_pro(kaufpreis, knk_prozent, miete_jahr, bew_kosten_prozent,
             "dscr": dscr, "steuerlast_jahr": steuerlast_jahr, "cashflow_nach_steuer": round(cashflow_nach_steuer_monat, 2), 
             "afa_jahr": afa_jahr, "afa_basis": bemessungsgrundlage_basis}
 
-# DETERMINISTISCHE GEODATEN-LOGIK (Kein Zufall, vollkommen reproduzierbar)
 def api_abfrage_bodenrichtwert(lat, lon, adresse):
     time.sleep(1.2)
     adresse_lower = adresse.lower()
     
-    # PLZ-Cluster und Gemeinden im Münchner Umland/Speckgürtel abfangen
+    # Erkennt Umlandgemeinden im Münchner Speckgürtel anhand von PLZ-Clustern oder Namen
     is_munich_suburb = any(plz in adresse_lower for plz in ["82008", "82041", "82031", "85521", "85609", "85716", "85748", "82152"])
     
     if is_munich_suburb or "unterhaching" in adresse_lower or "taufkirchen" in adresse_lower:
@@ -289,7 +285,7 @@ if menue == "Exposé Quick Check":
 
     if st.button("Exposé-Schnellprüfung ausführen", type="primary"):
         if qc_preis <= 0 or qc_miete <= 0:
-            st.error("❌ **Eingabefehler:** Kaufpreis und monatliche Kaltmiete müssen größer als 0 sein, um eine Analyse durchzuführen.")
+            st.error("❌ **Eingabefehler:** Kaufpreis und monatliche Kaltmiete müssen größer als 0 sein.")
         else:
             jahresmiete = (opt_sollmiete if opt_sollmiete > 0 else qc_miete * 12)
             reinertrag_jahr = jahresmiete - (opt_hausgeld * 12) if opt_hausgeld > 0 else jahresmiete * (1 - (default_bew / 100))
@@ -320,20 +316,20 @@ if menue == "Exposé Quick Check":
                 if simulierter_cashflow_monat >= 50: st.markdown("<div class='indicator-card indicator-green'>🟢 POSITIVER CASHFLOW (EST.)</div>", unsafe_allow_html=True)
                 elif simulierter_cashflow_monat >= -50: st.markdown("<div class='indicator-card indicator-yellow'>🟡 CASHFLOW-NEUTRAL (EST.)</div>", unsafe_allow_html=True)
                 else: st.markdown("<div class='indicator-card indicator-red'>🔴 NEGATIVE LIQUIDITÄTS-BELASTUNG</div>", unsafe_allow_html=True)
-            
-            st.markdown("<div class='benchmark-card'><div class='benchmark-title'>💡 Quick Check Ergebnis-Audit & Benchmark</div>"
-                        f"<div class='benchmark-text'><b>Was bedeuten diese Zahlen für Sie?</b><br>"
-                        f"Ein Kaufpreisfaktor von <b>{faktor:.1f}x</b> bedeutet, dass die Immobilie {faktor:.1f} Jahre benötigt, um ihre Kosten rein über die Miete abzubezahlen.<br><br>"
-                        f"<b>Markt-Benchmark:</b> In deutschen B- und C-Lagen liegt der Schnitt aktuell bei 21x bis 25x. In A-Metropolen werden oft Faktoren von 28x bis 33x verlangt.</div></div>", unsafe_allow_html=True)
 
 elif "1. Standort & Mikrolage" in menue:
     st.image("https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?ixlib=rb-4.0.3&auto=format&fit=crop&w=1600&h=400&q=80", use_container_width=True)
     st.title("Premium Valuation: 1. Standort & Mikrolage")
     st.divider()
-    adresse = st.text_input("Vollständige Objektadresse", value="Witneystraße 19, 82008 Unterhaching")
+    
+    # Neutrale Standardadresse gesetzt
+    adresse = st.text_input(
+        "Vollständige Objektadresse", value="Marienplatz 1, 80331 München",
+        help="Straße, Hausnummer, PLZ und Ort der Immobilie. Notwendig für die exakte Georeferenzierung."
+    )
     
     if st.button("Standortdaten & BRW abrufen", type="primary"):
-        lat_fallback, lon_fallback = 48.062, 11.621
+        lat_fallback, lon_fallback = 48.137, 11.575
         geolocator = Nominatim(user_agent="YieldBase_Production_System")
         try:
             location = geolocator.geocode(adresse, timeout=4)
@@ -349,8 +345,7 @@ elif "1. Standort & Mikrolage" in menue:
         
         st.markdown("<div class='benchmark-card'><div class='benchmark-title'>🏢 Standort & Bodenrichtwert Audit</div>"
                     f"<div class='benchmark-text'><b>Was bedeutet diese Zahl für Sie?</b><br>"
-                    f"Der Bodenrichtwert von <b>{brw_api_ergebnis} €/m²</b> ist der aus der Geonormierung abgeleitete Durchschnittswert für den nackten Boden in dieser Mikrolage.<br><br>"
-                    f"<b>Markt-Benchmark:</b> Im direkten Münchner Speckgürtel (wie Unterhaching) werden im Jahr 2026 regelhaft Werte von 1.500 € bis über 3.500 €/m² aufgerufen.</div></div>", unsafe_allow_html=True)
+                    f"Der Bodenrichtwert von <b>{brw_api_ergebnis} €/m²</b> ist der aus der Geonormierung abgeleitete Durchschnittswert für den nackten Boden in dieser Mikrolage.</div></div>", unsafe_allow_html=True)
 
 elif "2. Substanz & RND" in menue:
     st.image("https://images.unsplash.com/photo-1503387762-592deb58ef4e?ixlib=rb-4.0.3&auto=format&fit=crop&w=1600&h=400&q=80", use_container_width=True)
@@ -404,7 +399,7 @@ elif "3. Ertragswert (ImmoWertV)" in menue:
     if st.session_state.ertragswert_ergebnis:
         res = st.session_state.ertragswert_ergebnis
         if res['reinertrag'] < 0:
-            st.warning(f"⚠️ **Achtung (Bodenwert frisst Ertrag):** Der kalkulierte Gebäudereinertrag ist negativ ({res['reinertrag']:,.2f} €). Der Bodenwert ist für diese Mieteinnahmen zu hoch. Der mathematische Gebäudewertanteil wurde gemäß ImmoWertV auf 0 gesetzt.".replace(",", "."))
+            st.warning(f"⚠️ **Achtung (Bodenwert frisst Ertrag):** Der kalkulierte Gebäudereinertrag ist negativ ({res['reinertrag']:,.2f} €). Der Bodenwertanteil wurde genullt.".replace(",", "."))
             
         st.markdown("### Bewertungs-Ergebnis")
         c1, c2, c3 = st.columns(3)
@@ -429,7 +424,7 @@ elif "4. Sachwert (ImmoWertV)" in menue:
         boden = st.number_input("Bodenwert (€)", min_value=0, value=int(500 * st.session_state.bodenrichtwert_api), step=1000)
     
     st.divider()
-    swf = st.number_input("Sachwertfaktor (Marktanpassung laut Gutachterausschuss)", min_value=0.1, max_value=2.0, value=1.0, step=0.05)
+    swf = st.number_input("Sachwertfaktor (Marktanpassung)", min_value=0.1, max_value=2.0, value=1.0, step=0.05)
         
     if st.button("Substanzwert berechnen", type="primary"):
         awm_prozent = berechne_awm(st.session_state.rnd_kalibriert, gnd_eingabe)
@@ -474,15 +469,15 @@ elif "5. Cashflow & Leverage Engine" in menue:
             is_denkmal = (immo_zustand == "Denkmalschutz / Sanierung")
             if is_denkmal:
                 denkmal_sanierungsanteil = st.slider("Anteil Sanierungskosten am Gebäude (%)", 10, 90, 60)
-                afa_denkmal_satz = st.number_input("Denkmal-AfA p.a. (Jahre 1-8: 9%)", min_value=0.0, max_value=15.0, value=9.0, step=0.5)
+                afa_denkmal_satz = st.number_input("Denkmal-AfA p.a.", min_value=0.0, max_value=15.0, value=9.0, step=0.5)
                 afa_regulaer_satz = 2.0
             else:
                 denkmal_sanierungsanteil = 0; afa_denkmal_satz = 0
-                afa_regulaer_satz = st.number_input(f"Reguläre Gebäude-AfA p.a. (Vorschlag für {immo_zustand})", min_value=0.0, max_value=15.0, value=default_afa, step=0.5)
+                afa_regulaer_satz = st.number_input(f"Reguläre Gebäude-AfA p.a.", min_value=0.0, max_value=15.0, value=default_afa, step=0.5)
 
     if st.button("Cashflow-Modell generieren", type="primary"):
         if kaufpreis <= 0 or miete <= 0:
-            st.error("❌ **Berechnung unmöglich:** Bitte prüfen Sie Angebotspreis und Jahresmiete.")
+            st.error("❌ **Berechnung unmöglich:** Angebotspreis und Jahresmiete prüfen.")
         else:
             res = berechne_rendite_pro(kaufpreis, knk, miete, bew_kosten, ek, zins, tilgung, steuersatz, 
                                        afa_regulaer_satz, gebaeudeanteil, is_denkmal, 
@@ -512,9 +507,6 @@ elif "5. Cashflow & Leverage Engine" in menue:
         cf_nach = res['cashflow_nach_steuer']
         cf_color_nach = "🟢 Positiv" if cf_nach >= 0 else "🔴 Negativ"
         c7.metric(f"True Cashflow (Post-Tax)", f"{cf_nach:,.2f} € ({cf_color_nach})".replace(",", "."))
-        
-        st.markdown("<div class='benchmark-card'><div class='benchmark-title'>🏦 Finanzierung, Steuern & DSCR Audit</div>"
-                    f"<div class='benchmark-text'><b>Wichtiger Hinweis zum True Cashflow:</b> Eine ausgewiesene Steuererstattung setzt voraus, dass Sie im selben Kalenderjahr andere, zu versteuernde Einkommen (z.B. Gehalt) erzielen, um die Verluste sofort steuerlich wirksam gegenzurechnen.</div></div>", unsafe_allow_html=True)
 
 elif "6. Executive Pitch Deck" in menue:
     st.image("https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?ixlib=rb-4.0.3&auto=format&fit=crop&w=1600&h=400&q=80", use_container_width=True)
