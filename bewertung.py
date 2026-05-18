@@ -37,7 +37,7 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # --- 1. SESSION STATE ---
-if 'globale_rnd' not in st.session_state: st.session_state.globale_rnd = 40 
+if 'rnd_kalibriert' not in st.session_state: st.session_state.rnd_kalibriert = 40
 if 'ertragswert_ergebnis' not in st.session_state: st.session_state.ertragswert_ergebnis = None
 if 'sachwert_ergebnis' not in st.session_state: st.session_state.sachwert_ergebnis = None
 if 'rendite_ergebnis' not in st.session_state: st.session_state.rendite_ergebnis = None
@@ -140,7 +140,6 @@ with st.sidebar:
     st.markdown("<div class='trust-badge'>🛡️ ImmoWertV konform</div><div class='trust-badge'>🏦 Bankenstandard (DSCR)</div>", unsafe_allow_html=True)
     st.divider()
     
-    # Icons removed from label
     st.markdown("#### Asset-Spezifikation")
     immo_klasse = st.selectbox("Immobilienart", ["Eigentumswohnung", "Mehrfamilienhaus", "Einfamilienhaus"])
     immo_zustand = st.selectbox("Bauzustand / Epoche", ["Bestand (Altbau)", "Neubau", "Denkmalschutz / Sanierung"])
@@ -155,13 +154,11 @@ with st.sidebar:
         
     if immo_klasse == "Mehrfamilienhaus": default_zins -= 0.4
         
-    # Icon removed from label
     st.markdown("#### Analyse-Modus")
     modus_auswahl = st.radio("Modus wechseln", ["Exposé Quick Check", "Premium Valuation Pipeline"])
     st.divider()
     
     if modus_auswahl == "Premium Valuation Pipeline":
-        # Icon removed from label
         st.markdown("#### Pipeline-Schritte")
         menue = st.radio("Kapitel wählen", [
             "1. Standort & Mikrolage", 
@@ -173,7 +170,9 @@ with st.sidebar:
         ], label_visibility="collapsed")
         st.divider()
         st.markdown("#### Globale System-Variablen")
-        st.number_input("Restnutzungsdauer (RND):", min_value=1, max_value=100, key="globale_rnd")
+        
+        # FIX: Das Eingabefeld nutzt nun direkt st.session_state.rnd_kalibriert als Steuerung ohne Absturzgefahr
+        rnd_eingabe_sidebar = st.number_input("Restnutzungsdauer (RND):", min_value=1, max_value=100, key="rnd_kalibriert")
         st.write(f"Aktueller Bodenwert: **{st.session_state.bodenrichtwert_api} €/m²**")
         st.divider()
     else:
@@ -220,10 +219,7 @@ if menue == "Exposé Quick Check":
             opt_grundstueck = st.number_input("Grundstücksfläche (m²)", min_value=0, value=0, help="Nur relevant bei Häusern/Mehrfamilienhäusern zur exakteren Bodenwertermittlung im Quick-Check.")
 
     if st.button("Exposé-Schnellprüfung ausführen", type="primary"):
-        # Logik-Übersteuerung durch Realwerte oder Smart-Defaults
         jahresmiete = (opt_sollmiete if opt_sollmiete > 0 else qc_miete * 12)
-        
-        # Hausgeld Override oder System-Schätzung
         if opt_hausgeld > 0:
             reinertrag_jahr = jahresmiete - (opt_hausgeld * 12)
         else:
@@ -235,7 +231,7 @@ if menue == "Exposé Quick Check":
         
         gesamtinvestition = qc_preis * (1 + (qc_knk / 100))
         fremdkapital = gesamtinvestition * 0.80
-        kapitaldienst_jahr = fremdkapital * (0.04 + 0.02) # 4% Zins, 2% Tilgung als Standard-Banken-Szenario
+        kapitaldienst_jahr = fremdkapital * (0.04 + 0.02)
         simulierter_cashflow_monat = (reinertrag_jahr - kapitaldienst_jahr) / 12
         
         st.markdown("### 📊 Indikatoren-Analyse")
@@ -326,8 +322,9 @@ elif "2. Substanz & RND" in menue:
     neue_rnd = min(gnd, basis_rnd + zusatz_jahre)
     st.info(f"Substanz-Rating: **{grad}** (Wirtschaftlicher Lebenszyklus verlängert sich um {zusatz_jahre} Jahre)")
     
+    # FIX: Setzt den internen Wert direkt im session_state fest
     if st.button("Restnutzungsdauer kalibrieren", type="primary"):
-        st.session_state.globale_rnd = neue_rnd
+        st.session_state.rnd_kalibriert = neue_rnd
         st.rerun()
 
 elif "3. Ertragswert (ImmoWertV)" in menue:
@@ -345,13 +342,13 @@ elif "3. Ertragswert (ImmoWertV)" in menue:
         brw = st.number_input("Bodenrichtwert (€/m²)", min_value=0, value=st.session_state.bodenrichtwert_api, step=10)
         
     if st.button("Ertragswert generieren", type="primary"):
-        aktueller_rbf = berechne_rbf(zins, st.session_state.globale_rnd)
+        aktueller_rbf = berechne_rbf(zins, st.session_state.rnd_kalibriert)
         gesamtwert, bodenwert = berechne_ertragswert(miete, bew_kosten, flaeche, brw, zins, aktueller_rbf)
         st.session_state.ertragswert_ergebnis = {"gesamt": gesamtwert, "boden": bodenwert, "rbf": aktueller_rbf}
         
     if st.session_state.ertragswert_ergebnis:
         res = st.session_state.ertragswert_ergebnis
-        st.markdown("### Bewertungs-Ergebnis")
+        st.markdown("### Mitglieds-Ergebnis")
         c1, c2, c3 = st.columns(3)
         c1.metric("Kapitalisierungsfaktor", res['rbf'])
         c2.metric("Bodenwertanteil", f"{res['boden']:,.0f} €".replace(",", "."))
@@ -379,7 +376,7 @@ elif "4. Sachwert (ImmoWertV)" in menue:
     swf = st.number_input("Sachwertfaktor (Marktanpassung laut Gutachterausschuss)", min_value=0.1, max_value=2.0, value=1.0, step=0.05)
         
     if st.button("Substanzwert berechnen", type="primary"):
-        awm_prozent = berechne_awm(st.session_state.globale_rnd, gnd_eingabe)
+        awm_prozent = berechne_awm(st.session_state.rnd_kalibriert, gnd_eingabe)
         gesamt_sw, gebaeude_sw, hk, vor_sw = berechne_sachwert(bgf, nhk, regio, bpi, awm_prozent, boden, swf)
         st.session_state.sachwert_ergebnis = {"gesamt": gesamt_sw, "gebaeude": gebaeude_sw, "hk": hk, "awm": awm_prozent, "vor_sw": vor_sw}
         
@@ -438,62 +435,4 @@ elif "5. Cashflow & Leverage Engine" in menue:
         st.write("### 1. Performance-Metriken")
         c1, c2, c3, c4 = st.columns(4)
         c1.metric("Return on Equity (ROE)", f"{res['ek_rendite']} %")
-        dscr = res['dscr']
-        if isinstance(dscr, float):
-            dscr_color = "🟢 Bankfähig" if dscr >= 1.2 else ("🟡 Restriktiv" if dscr >= 1.0 else "🔴 Hochrisiko")
-            c2.metric(f"Debt Service (DSCR)", f"{dscr} ({dscr_color})")
-        else: st.metric("DSCR", dscr)
-        c3.metric("Netto-Mietrendite", f"{res['netto']} %")
-        c4.metric("Kaufpreisfaktor", f"{res['faktor']} fach")
-
-        st.divider()
-        st.write("### 2. Liquiditäts-Prognose")
-        c5, c6, c7 = st.columns(3)
-        c5.metric("Free Cashflow (Pre-Tax)", f"{res['cashflow_monat']:,.2f} €".replace(",", "."))
-        steuer = res['steuerlast_jahr'] / 12
-        steuer_text = "Steuerlast p.M." if steuer > 0 else "Steuererstattung (Tax Shield) p.M."
-        c6.metric(steuer_text, f"{abs(steuer):,.2f} €".replace(",", "."))
-        cf_nach = res['cashflow_nach_steuer']
-        cf_color_nach = "🟢 Positiv" if cf_nach >= 0 else "🔴 Negativ"
-        c7.metric(f"True Cashflow (Post-Tax)", f"{cf_nach:,.2f} € ({cf_color_nach})".replace(",", "."))
-
-elif "6. Executive Pitch Deck" in menue:
-    st.image("https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?ixlib=rb-4.0.3&auto=format&fit=crop&w=1600&h=400&q=80", use_container_width=True)
-    st.title("Premium Valuation: 6. Executive Pitch Deck")
-    st.markdown(f"Konsolidierter Investment-Report für: **{immo_klasse} - {immo_zustand}**")
-    st.divider()
-    
-    if not (st.session_state.ertragswert_ergebnis and st.session_state.sachwert_ergebnis and st.session_state.rendite_ergebnis):
-        st.warning("⚠️ Der Report ist unvollständig. Bitte durchlaufen Sie die Valuation Pipeline (Schritte 3-5), um die Daten zu generieren.")
-    else:
-        ew = st.session_state.ertragswert_ergebnis; sw = st.session_state.sachwert_ergebnis; re = st.session_state.rendite_ergebnis
-        st.markdown("### Valuation-Profil (ImmoWertV)")
-        col_rep1, col_rep2 = st.columns(2, gap="large")
-        with col_rep1: st.metric("Kalkulierter Ertragswert", f"{ew['gesamt']:,.0f} €".replace(",", "."))
-        with col_rep2: st.metric("Kalkulierter Sachwert", f"{sw['gesamt']:,.0f} €".replace(",", "."))
-            
-        st.divider()
-        st.markdown("### Investment-Profil")
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Einstiegsfaktor", f"{re['faktor']} fach")
-        c2.metric("Nettorendite", f"{re['netto']} %")
-        c3.metric("Leveraged ROE", f"{re['ek_rendite']} %")
-        c4.metric("Bank-Rating (DSCR)", f"{re['dscr']}")
-        
-        st.divider()
-        st.markdown("### Liquiditäts-Profil")
-        c5, c6 = st.columns(2)
-        c5.metric("Operativer Cashflow (Pre-Tax)", f"{re['cashflow_monat']:,.2f} €".replace(",", "."))
-        c6.metric("Echter Portfolio-Cashflow (Post-Tax)", f"{re['cashflow_nach_steuer']:,.2f} €".replace(",", "."))
-        
-        st.markdown(f"""
-        <div class='legal-box'>
-            <div class='legal-text'>
-                <b>⚖️ RECHTLICHER DISCLAIMER & HAFTUNGSAUSSCHLUSS:</b><br>
-                Die von <i>YieldBase</i> generierten Ergebnisse stellen eine unverbindliche mathematische Modellsimulation dar und dienen ausschließlich der Orientierung. Sie ersetzen ausdrücklich <b>keine</b> rechtliche, steuerliche oder finanzielle Beratung sowie kein Verkehrswertgutachten gemäß § 194 BauGB durch einen zertifizierten Sachverständigen. Eine Haftung für Vermögensschäden, die aus der Nutzung dieser Daten resultieren, wird im gesetzlich zulässigen Rahmen ausgeschlossen (§ 675 Abs. 2 BGB).<br><br>
-                <b>📊 QUELLENANGABEN & PROPRIETÄRER SCHUTZHINWEIS:</b><br>
-                Berechnungsmethodik konform mit der Immobilienwertermittlungsverordnung (ImmoWertV). Indexierte Baukosten basieren auf historischen Werten des Statistischen Bundesamtes (Destatis).<br><br>
-                <b>© {current_year} Lars Möschwitzer. Alle Rechte vorbehalten.</b> Sämtliche Urheberrechte und geistigen Eigentumsrechte an dieser Applikation, einschließlich Quellcode, Benutzeroberfläche, Logo-Design und Berechnungslogik der Marke <i>YieldBase</i>, verbleiben vollumfänglich und exklusiv beim Urheber Lars Möschwitzer.
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+        dscr = res
