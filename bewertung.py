@@ -46,7 +46,6 @@ if 'sachwert_ergebnis' not in st.session_state: st.session_state.sachwert_ergebn
 if 'rendite_ergebnis' not in st.session_state: st.session_state.rendite_ergebnis = None
 if 'bodenrichtwert_api' not in st.session_state: st.session_state.bodenrichtwert_api = 800
 
-# Quick Check Zustandswerte im Speicher halten
 if 'qc_preis_val' not in st.session_state: st.session_state.qc_preis_val = 350000
 if 'qc_miete_val' not in st.session_state: st.session_state.qc_miete_val = 1200
 if 'qc_flaeche_val' not in st.session_state: st.session_state.qc_flaeche_val = 75
@@ -125,9 +124,7 @@ def berechne_rendite_pro(kaufpreis, knk_prozent, miete_jahr, bew_kosten_prozent,
 
 def api_abfrage_bodenrichtwert(lat, lon, adresse):
     time.sleep(1.2) 
-    if "Unterhaching" in adresse or "Witneystraße" in adresse: 
-        return 2350
-    elif "München" in adresse: 
+    if "Marienplatz" in adresse or "München" in adresse: 
         return 3500
     else: 
         return random.choice([350, 420, 550, 800, 1200, 150])
@@ -203,18 +200,17 @@ with st.sidebar:
         st.markdown(f"""
         <div class='legal-text'>
         <b>Anbieterkennzeichnung gem. § 5 DDG:</b><br>
-        Lars Möschwitzer<br>
-        Witneystraße 19<br>
-        82008 Unterhaching<br>
-        Deutschland<br><br>
+        YieldBase Analytics & Systems<br>
+        Privates Analyse-Framework<br>
+        München, Deutschland<br><br>
         <b>Urheberrecht & Urheberrechtsschutz:</b><br>
-        © {current_year} Lars Möschwitzer. Alle Rechte vorbehalten. Die Softwarearchitektur, das visuelle Interface-Design der Marke <i>YieldBase</i> sowie sämtliche zugrundeliegenden proprietären Berechnungsalgorithmen sind als geistiges Eigentum des Urhebers geschützt (§ 2, § 69a ff. UrhG). Jede unbefugte Vervielfältigung, Verbreitung, Modifikation oder Dekompilierung ist untersagt.<br><br>
+        © {current_year} YieldBase. Alle Rechte vorbehalten. Die Softwarearchitektur, das visuelle Interface-Design sowie sämtliche zugrundeliegenden Berechnungsalgorithmen sind geschützt (§ 2, § 69a ff. UrhG). Jede unbefugte Vervielfältigung, Verbreitung oder Modifikation ist untersagt.<br><br>
         <b>Datenschutz gem. DSGVO:</b><br>
-        Dieses Webtool speichert keine Daten auf externen Servern. Eingegebene Adressdaten werden verschlüsselt (SSL) an OpenStreetMap übertragen.
+        Dieses Webtool speichert keine personenbezogenen Daten auf externen Servern. Eingegebene Adressdaten werden verschlüsselt (SSL) an OpenStreetMap übertragen.
         </div>
         """, unsafe_allow_html=True)
         
-    st.markdown(f"<div class='sidebar-branding'>Developed by Lars Möschwitzer</div>", unsafe_allow_html=True)
+    st.markdown(f"<div class='sidebar-branding'>Developed by YieldBase</div>", unsafe_allow_html=True)
 
 # --- 4. MAIN CONTENT ---
 if menue == "Exposé Quick Check":
@@ -322,7 +318,7 @@ if menue == "Exposé Quick Check":
         st.markdown("<div class='benchmark-card'><div class='benchmark-title'>💡 Quick Check Ergebnis-Audit & Benchmark</div>"
                     f"<div class='benchmark-text'><b>Was bedeuten diese Zahlen für Sie?</b><br>"
                     f"Ein Kaufpreisfaktor von <b>{faktor:.1f}x</b> bedeutet, dass die Immobilie {faktor:.1f} Jahre benötigt, um ihre Kosten rein über die Miete abzubezahlen. Im aktuellen Zinsumfeld gilt: Faktoren unter 22x finanzieren sich oft von selbst. Werte über 28x sind riskant, da die Miete die hohen Zinsen der Bank nicht decken kann.<br><br>"
-                    f"<b>Markt-Benchmark:</b> In deutschen B- und C-Lagen liegt der Schnitt aktuell bei 21x bis 25x. In A-Metropolen (wie München) werden oft Faktoren von 28x bis 33x verlangt, was für Kleinanleger ohne massives Eigenkapital ein monatliches Zuzahlungsgeschäft bedeutet.</div></div>", unsafe_allow_html=True)
+                    f"<b>Markt-Benchmark:</b> In deutschen B- und C-Lagen liegt der Schnitt aktuell bei 21x bis 25x. In A-Metropolen werden oft Faktoren von 28x bis 33x verlangt, was für Kleinanleger ohne massives Eigenkapital ein monatliches Zuzahlungsgeschäft bedeutet.</div></div>", unsafe_allow_html=True)
 
 elif "1. Standort & Mikrolage" in menue:
     st.image("https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?ixlib=rb-4.0.3&auto=format&fit=crop&w=1600&h=400&q=80", use_container_width=True)
@@ -330,12 +326,12 @@ elif "1. Standort & Mikrolage" in menue:
     st.divider()
     
     adresse = st.text_input(
-        "Vollständige Objektadresse", value="Witneystraße 19, 82008 Unterhaching",
+        "Vollständige Objektadresse", value="Marienplatz 1, 80331 München",
         help="Straße, Hausnummer, PLZ und Ort der Immobilie.\n\nWo zu finden? Im Exposé oder Kaufvertragsentwurf. Notwendig für die exakte Georeferenzierung auf der Karte."
     )
     
     if st.button("Standortdaten & BRW abrufen", type="primary"):
-        lat_fallback, lon_fallback = 48.062, 11.621
+        lat_fallback, lon_fallback = 48.137, 11.575
         geolocator = Nominatim(user_agent="YieldBase_Production_System")
         try:
             location = geolocator.geocode(adresse, timeout=4)
@@ -351,8 +347,8 @@ elif "1. Standort & Mikrolage" in menue:
         
         st.markdown("<div class='benchmark-card'><div class='benchmark-title'>🏢 Standort & Bodenrichtwert Audit</div>"
                     f"<div class='benchmark-text'><b>Was bedeutet diese Zahl für Sie?</b><br>"
-                    f"Der Bodenrichtwert von <b>{brw_api_ergebnis} €/m²</b> ist der offizielle Durchschnittswert für den nackten Boden in dieser Mikrolage. Er ist das fundamentale Sicherheitsnetz: Selbst wenn das Gebäude abbrennt oder verfällt, bleibt dieser Wert im Boden bestehen.<br><br>"
-                    f"<b>Markt-Benchmark:</b> Ländliche Regionen liegen oft bei 80 € bis 250 €/m². Mittlere Städte bewegen sich zwischen 400 € und 900 €/m². In absoluten Top-Metropolen (München, Stuttgart) werden nicht selten 2.000 € bis über 4.500 €/m² aufgerufen. Je höher der Bodenwertanteil am Gesamtkaufpreis ist, desto krisensicherer ist das Investment.</div></div>", unsafe_allow_html=True)
+                    f"Der Bodenrichtwert von <b>{brw_api_ergebnis} €/m²</b> ist der offizielle Durchschnittswert für den nackten Boden in dieser Mikrolage. Er ist das fundamentale Sicherheitsnetz: Selbst wenn das Gebäude verfällt, bleibt dieser Wert im Boden bestehen.<br><br>"
+                    f"<b>Markt-Benchmark:</b> Ländliche Regionen liegen oft bei 80 € bis 250 €/m². Mittlere Städte bewegen sich zwischen 400 € und 900 €/m². In absoluten Top-Metropolen werden nicht selten 2.000 € bis über 4.500 €/m² aufgerufen. Je höher der Bodenwertanteil am Gesamtkaufpreis ist, desto krisensicherer ist das Investment.</div></div>", unsafe_allow_html=True)
 
 elif "2. Substanz & RND" in menue:
     st.image("https://images.unsplash.com/photo-1503387762-592deb58ef4e?ixlib=rb-4.0.3&auto=format&fit=crop&w=1600&h=400&q=80", use_container_width=True)
@@ -514,15 +510,15 @@ elif "5. Cashflow & Leverage Engine" in menue:
         st.markdown("#### Debt / Fremdkapital")
         ek = st.slider(
             "Eigenkapital-Quote (%)", 10.0, 100.0, 20.0, step=1.0,
-            help="Der prozentuale Anteil der Gesamtkosten, den du aus eigenen liquiden Mitteln einbringst.\n\nWo zu finden? Entspricht deiner persönlichen Liquiditätsplanung und Absprache mit der finanzierenden Bank."
+            help="Der prozentuale Anteil der Gesamtkosten, den du aus eigenen liquiden Mitteln einbringst.\n\nWo zu finden? Entspricht deiner persönlichen Liquiditätsplanung."
         )
         zins = st.number_input(
             "Fremdkapitalzins p.a. (%)", min_value=0.1, max_value=10.0, value=3.8, step=0.1,
-            help="Der Sollzinssatz der Bank für das Immobiliendarlehen.\n\nWo zu finden? Im aktuellen indikativen Finanzierungsangebot deiner Bank oder über Zins-Vermittler."
+            help="Der Sollzinssatz der Bank für das Immobiliendarlehen.\n\nWo zu finden? Im aktuellen indikativen Finanzierungsangebot deiner Bank."
         )
         tilgung = st.number_input(
             "Tilgungssatz p.a. (%)", min_value=0.0, max_value=10.0, value=2.0, step=0.1,
-            help="Die anfängliche jährliche Rückzahlung des Darlehens.\n\nWo zu finden? Wird im Kreditvertrag individuell festgelegt (Standard ist meist 1.5% - 2%)."
+            help="Die anfängliche jährliche Rückzahlung des Darlehens.\n\nWo zu finden? Wird im Kreditvertrag individuell festgelegt."
         )
     with col_r3:
         if immo_zustand == "Denkmalschutz / Sanierung":
@@ -540,7 +536,7 @@ elif "5. Cashflow & Leverage Engine" in menue:
         with col_p2: 
             gebaeudeanteil = st.slider(
                 "Gebäudeanteil der Gesamtinvestition (%)", 0, 100, 80,
-                help="Der prozentuale Wertanteil des reinen Gebäudes an den Gesamtkosten, da der Grund und Boden steuerlich nicht abgeschrieben werden kann.\n\nWo zu finden? Wird vom Finanzamt mittels einer standardisierten Arbeitshilfe berechnet oder im Kaufvertrag fest vereinbart."
+                help="Der prozentuale Wertanteil des reinen Gebäudes an den Gesamtkosten, da der Grund und Boden steuerlich nicht abgeschrieben werden kann.\n\nWo zu finden? Wird vom Finanzamt mittels einer standardisierten Arbeitshilfe berechnet."
             )
         with col_p3: 
             is_denkmal = (immo_zustand == "Denkmalschutz / Sanierung")
@@ -623,7 +619,7 @@ elif "6. Executive Pitch Deck" in menue:
                 Die von <i>YieldBase</i> generierten Ergebnisse stellen eine unverbindliche mathematische Modellsimulation dar und dienen ausschließlich der Orientierung. Sie ersetzen ausdrücklich <b>keine</b> rechtliche, steuerliche oder finanzielle Beratung sowie kein Verkehrswertgutachten gemäß § 194 BauGB durch einen zertifizierten Sachverständigen. Eine Haftung für Vermögensschäden, die aus der Nutzung dieser Daten resultieren, wird im gesetzlich zulässigen Rahmen ausgeschlossen (§ 675 Abs. 2 BGB).<br><br>
                 <b>📊 QUELLENANGABEN & PROPRIETÄRER SCHUTZHINWEIS:</b><br>
                 Berechnungsmethodik konform mit der Immobilienwertermittlungsverordnung (ImmoWertV). Indexierte Baukosten basieren auf historischen Werten des Statistischen Bundesamtes (Destatis).<br><br>
-                <b>© {current_year} Lars Möschwitzer. Alle Rechte vorbehalten.</b> Sämtliche Urheberrechte und geistigen Eigentumsrechte an dieser Applikation, einschließlich Quellcode, Benutzeroberfläche, Logo-Design und Berechnungslogik der Marke <i>YieldBase</i>, verbleiben vollumfänglich und exklusiv beim Urheber Lars Möschwitzer.
+                <b>© {current_year} YieldBase. Alle Rechte vorbehalten.</b> Sämtliche Urheberrechte und geistigen Eigentumsrechte an dieser Applikation, einschließlich Quellcode, Benutzeroberfläche und Berechnungslogik der Marke <i>YieldBase</i>, verbleiben vollumfänglich und exklusiv beim Urheber.
             </div>
         </div>
         """, unsafe_allow_html=True)
