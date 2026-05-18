@@ -33,24 +33,27 @@ st.markdown("""
     .indicator-green { background-color: #10b981; }
     .indicator-yellow { background-color: #f59e0b; }
     .indicator-red { background-color: #ef4444; }
+    .kpi-box { background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 1.2rem; border-radius: 8px; margin-bottom: 1rem; }
+    .kpi-title { font-weight: 600; color: #0f172a; font-size: 1rem; margin-bottom: 0.4rem; }
+    .kpi-text { font-size: 0.85rem; color: #334155; line-height: 1.5; }
+    .kpi-source { font-size: 0.8rem; color: #64748b; margin-top: 0.3rem; font-style: italic; background: #f1f5f9; padding: 0.3rem 0.6rem; border-radius: 4px; display: inline-block; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 1. PERSISTENT SESSION STATE VALUES ---
+# --- 1. PERSISTENT GLOBAL STORAGE ---
 if 'rnd_kalibriert' not in st.session_state: st.session_state.rnd_kalibriert = 40
 if 'ertragswert_ergebnis' not in st.session_state: st.session_state.ertragswert_ergebnis = None
 if 'sachwert_ergebnis' not in st.session_state: st.session_state.sachwert_ergebnis = None
 if 'rendite_ergebnis' not in st.session_state: st.session_state.rendite_ergebnis = None
 if 'bodenrichtwert_api' not in st.session_state: st.session_state.bodenrichtwert_api = 800
 
-# Quick Check Speicher-Variablen initialisieren
-if 'qc_preis_val' not in st.session_state: st.session_state.qc_preis_val = 350000
-if 'qc_miete_val' not in st.session_state: st.session_state.qc_miete_val = 1200
-if 'qc_flaeche_val' not in st.session_state: st.session_state.qc_flaeche_val = 75
-if 'qc_knk_val' not in st.session_state: st.session_state.qc_knk_val = 8.5
-if 'opt_hausgeld_val' not in st.session_state: st.session_state.opt_hausgeld_val = 0
-if 'opt_sollmiete_val' not in st.session_state: st.session_state.opt_sollmiete_val = 0
-if 'opt_grundstueck_val' not in st.session_state: st.session_state.opt_grundstueck_val = 0
+if 'qc_preis' not in st.session_state: st.session_state.qc_preis = 350000
+if 'qc_miete' not in st.session_state: st.session_state.qc_miete = 1200
+if 'qc_flaeche' not in st.session_state: st.session_state.qc_flaeche = 75
+if 'qc_knk' not in st.session_state: st.session_state.qc_knk = 8.5
+if 'opt_hausgeld' not in st.session_state: st.session_state.opt_hausgeld = 0
+if 'opt_sollmiete' not in st.session_state: st.session_state.opt_sollmiete = 0
+if 'opt_grundstueck' not in st.session_state: st.session_state.opt_grundstueck = 0
 
 # --- 2. BACKEND ENGINE ---
 def berechne_rbf(liegenschaftszins, restnutzungsdauer):
@@ -148,7 +151,7 @@ with st.sidebar:
     """
     st.markdown(logo_svg, unsafe_allow_html=True)
     st.title("YieldBase")
-    st.caption("Analytik mit Substanz. Rendite mit System.")
+    st.caption("Analytik mit Substanzen. Rendite mit System.")
     st.markdown("<div class='trust-badge'>🛡️ ImmoWertV konform</div><div class='trust-badge'>🏦 Bankenstandard (DSCR)</div>", unsafe_allow_html=True)
     st.divider()
     
@@ -216,42 +219,39 @@ if menue == "Exposé Quick Check":
     
     col_q1, col_q2 = st.columns(2, gap="large")
     with col_q1:
-        qc_preis = st.number_input("Kaufpreis laut Exposé (€)", min_value=0, value=int(st.session_state.qc_preis_val), step=10000, key="qc_preis_input")
-        st.session_state.qc_preis_val = qc_preis
-        
-        qc_miete = st.number_input("Monatliche Ist-Kaltmiete (€)", min_value=0, value=int(st.session_state.qc_miete_val), step=50, key="qc_miete_input")
-        st.session_state.qc_miete_val = qc_miete
+        st.number_input("Kaufpreis laut Exposé (€)", min_value=0, step=10000, key="qc_preis")
+        st.number_input("Monatliche Ist-Kaltmiete (€)", min_value=0, step=50, key="qc_miete")
     with col_q2:
-        qc_flaeche = st.number_input("Wohnfläche (m²)", min_value=1, value=int(st.session_state.qc_flaeche_val), step=5, key="qc_flaeche_input")
-        st.session_state.qc_flaeche_val = qc_flaeche
-        
-        qc_knk = st.slider("Kaufnebenkosten-Schätzung (%)", 5.0, 15.0, float(st.session_state.qc_knk_val), step=0.5, key="qc_knk_input")
-        st.session_state.qc_knk_val = qc_knk
+        st.number_input("Wohnfläche (m²)", min_value=1, step=5, key="qc_flaeche")
+        st.slider("Kaufnebenkosten-Schätzung (%)", 5.0, 15.0, step=0.5, key="qc_knk")
 
     with st.expander("➕ Optionale Exposé-Angaben hinzufügen (Überschreibt Erfahrungswerte)", expanded=True):
         col_o1, col_o2 = st.columns(2)
         with col_o1:
-            opt_hausgeld = st.number_input("Tatsächliches Hausgeld / nicht umlegbare OpEx (€/Monat)", min_value=0, value=int(st.session_state.opt_hausgeld_val), help="Geben Sie hier das monatliche Hausgeld oder die nicht umlegbaren Betriebskosten laut Abrechnung ein. Bleibt der Wert bei 0, schätzt das Tool die Pauschale bankenüblich anhand der Objektart.", key="opt_hausgeld_input")
-            st.session_state.opt_hausgeld_val = opt_hausgeld
-            
-            opt_sollmiete = st.number_input("Soll-Miete / Mietpotenzial p.a. (€)", min_value=0, value=int(st.session_state.opt_sollmiete_val), help="Falls das Objekt aktuell leer steht oder massiv untervermietet ist, können Sie hier die realistische Ziel-Jahresmiete eingeben. Das Tool nutzt diese dann für die Renditeberechnung.", key="opt_sollmiete_input")
-            st.session_state.opt_sollmiete_val = opt_sollmiete
+            st.number_input("Tatsächliches Hausgeld / nicht umlegbare OpEx (€/Monat)", min_value=0, step=10, key="opt_hausgeld", help="Geben Sie hier das monatliche Hausgeld oder die nicht umlegbaren Betriebskosten laut Abrechnung ein. Bleibt der Wert bei 0, schätzt das Tool die Pauschale bankenüblich anhand der Objektart.")
+            st.number_input("Soll-Miete / Mietpotenzial p.a. (€)", min_value=0, step=500, key="opt_sollmiete", help="Falls das Objekt aktuell leer steht oder massiv untervermietet ist, können Sie hier die realistische Ziel-Jahresmiete eingeben. Das Tool nutzt diese dann für die Renditeberechnung.")
         with col_o2:
-            opt_grundstueck = st.number_input("Grundstücksfläche (m²)", min_value=0, value=int(st.session_state.opt_grundstueck_val), help="Nur relevant für Einfamilienhäuser oder Mehrfamilienhäuser. Ermöglicht im Hintergrund eine präzisere Aufteilung in Bodenwert und Gebäudewert.", key="opt_grundstueck_input")
-            st.session_state.opt_grundstueck_val = opt_grundstueck
+            st.number_input("Grundstücksfläche (m²)", min_value=0, step=50, key="opt_grundstueck", help="Nur relevant für Einfamilienhäuser oder Mehrfamilienhäuser. Ermöglicht im Hintergrund eine präzisere Aufteilung in Bodenwert und Gebäudewert.")
 
     if st.button("Exposé-Schnellprüfung ausführen", type="primary"):
-        jahresmiete = (opt_sollmiete if opt_sollmiete > 0 else qc_miete * 12)
-        if opt_hausgeld > 0:
-            reinertrag_jahr = jahresmiete - (opt_hausgeld * 12)
+        p_preis = st.session_state.qc_preis
+        p_miete = st.session_state.qc_miete
+        p_flaeche = st.session_state.qc_flaeche
+        p_knk = st.session_state.qc_knk
+        p_opt_hausgeld = st.session_state.opt_hausgeld
+        p_opt_sollmiete = st.session_state.opt_sollmiete
+
+        jahresmiete = (p_opt_sollmiete if p_opt_sollmiete > 0 else p_miete * 12)
+        if p_opt_hausgeld > 0:
+            reinertrag_jahr = jahresmiete - (p_opt_hausgeld * 12)
         else:
             reinertrag_jahr = jahresmiete * (1 - (default_bew / 100))
             
-        bruttorendite = (jahresmiete / qc_preis) * 100 if qc_preis > 0 else 0
-        faktor = qc_preis / jahresmiete if jahresmiete > 0 else 0
-        quadratmeterpreis = qc_preis / qc_flaeche if qc_flaeche > 0 else 0
+        bruttorendite = (jahresmiete / p_preis) * 100 if p_preis > 0 else 0
+        faktor = p_preis / jahresmiete if jahresmiete > 0 else 0
+        quadratmeterpreis = p_preis / p_flaeche if p_flaeche > 0 else 0
         
-        gesamtinvestition = qc_preis * (1 + (qc_knk / 100))
+        gesamtinvestition = p_preis * (1 + (p_knk / 100))
         fremdkapital = gesamtinvestition * 0.80
         kapitaldienst_jahr = fremdkapital * (0.04 + 0.02)
         simulierter_cashflow_monat = (reinertrag_jahr - kapitaldienst_jahr) / 12
@@ -281,7 +281,45 @@ if menue == "Exposé Quick Check":
                 st.markdown(f"<div class='indicator-card indicator-yellow'>🟡 CASHFLOW-NEUTRAL (EST.)<br><span style='font-size:0.8rem;font-weight:normal;'>Objekt trägt sich fast von selbst (ca. {simulierter_cashflow_monat:,.2f} €/Monat).</span></div>".replace(",", "."), unsafe_allow_html=True)
             else:
                 st.markdown(f"<div class='indicator-card indicator-red'>🔴 NEGATIVE LIQUIDITÄTS-BELASTUNG<br><span style='font-size:0.8rem;font-weight:normal;'>Zuzahlungsgeschäft! Ca. {simulierter_cashflow_monat:,.2f} €/Monat Unterdeckung.</span></div>".replace(",", "."), unsafe_allow_html=True)
-        st.write("")
+        
+        # --- 🔄 NEU: EXPERTEN-KREMIUM KPI LEXIKON & DOKUMENTEN GUIDE ---
+        st.divider()
+        st.markdown("### 📘 KPI-Lexikon & Dokumenten-Guide")
+        
+        st.markdown("""
+        <div class='kpi-box'>
+            <div class='kpi-title'>1. Kaufpreisfaktor (Vervielfältiger)</div>
+            <div class='kpi-text'>
+                <b>Aussage & Bedeutung:</b> Gibt an, wie viele Jahre es dauert, bis das Objekt seine reinen Anschaffungskosten durch die Bruttomiete wieder eingespielt hat. Ein Faktor unter 22x gilt im aktuellen Zinsumfeld als cashflow-stark. Werte über 28x deuten auf eine spekulative Marktlage hin und führen ohne hohes Eigenkapital oft zu monatlichen Zuzahlungen.<br>
+                <b>Wo zu finden, wenn fehlend?</b> Berechnet sich mathematisch direkt aus dem Kaufpreis dividiert durch die Jahresnettokaltmiete. Liegt keine Mietangabe vor, hilft ein Blick in den lokalen Mietspiegel zur Schätzung der marktüblichen Vergleichsmiete.
+            </div>
+        </div>
+        
+        <div class='kpi-box'>
+            <div class='kpi-title'>2. Bruttorendite p.a.</div>
+            <div class='kpi-text'>
+                <b>Aussage & Bedeutung:</b> Der prozentuale Gegenpart zum Kaufpreisfaktor. Er drückt das Verhältnis der jährlichen Mieteinnahmen zum nackten Kaufpreis aus. Wichtig: Diese Kennzahl ignoriert Kaufnebenkosten und Betriebskosten komplett und dient rein dem schnellen, groben Marktvergleich.<br>
+                <b>Wo zu finden, wenn fehlend?</b> Wird automatisch aus der Jahreskaltmiete errechnet. Ist die Wohnung leerstehend, ermitteln Sie das nachhaltige Mietpotenzial über Portale wie Immobilienscout24 (Vergleichsobjekte im Umkreis von 1 km) oder über den amtlichen Mietspiegel der Gemeinde.
+            </div>
+        </div>
+
+        <div class='kpi-box'>
+            <div class='kpi-title'>3. Hausgeld & Nicht umlegbare Betriebskosten (OpEx)</div>
+            <div class='kpi-text'>
+                <b>Aussage & Bedeutung:</b> Das Hausgeld teilt sich in umlegbare Kosten (zahlt der Mieter) und nicht umlegbare Kosten (Instandhaltungsrücklage, Verwaltergebühr – trägt zwingend der Eigentümer) auf. Die nicht umlegbaren Kosten schmälern deinen Cashflow direkt. Fehlen sie im Inserat, kalkuliert YieldBase automatisch mit einem statistischen Sicherheitsabschlag.<br>
+                <b>Wo zu finden, wenn fehlend?</b> Diese Angaben stehen niemals im öffentlichen Online-Inserat. Fordern Sie beim Makler gezielt die **letzten drei Einzelwirtschaftspläne** sowie das Protokoll der **letzten Eigentümerversammlung (ETV)** an. Dort ist die exakte monatliche Zuführung zur Instandhaltungsrücklage centgenau aufgeführt.
+            </div>
+        </div>
+
+        <div class='kpi-box'>
+            <div class='kpi-title'>4. Grundstücksfläche & Bodenrichtwert</div>
+            <div class='kpi-text'>
+                <b>Aussage & Bedeutung:</b> Bestimmt den Realwert des Bodens, auf dem die Immobilie steht. Da Grund und Boden sich im Gegensatz zum Gebäude nicht abnutzen, ist dies das wichtigste Sicherheitsnetz für Banken. Zudem zieht das Finanzamt den Bodenwert ab, um die steuerlich absetzbare Gebäude-AfA zu ermitteln (je höher der Gebäudeanteil, desto mehr Steuern sparst du).<br>
+                <b>Wo zu finden, wenn fehlend?</b> Die Grundstücksgröße steht im **Grundbuchauszug (Bestandsverzeichnis)**. Den offiziellen Bodenrichtwert ermitteln Sie kostenfrei über das behördliche Portal **BORIS (Bundesland-spezifisch)** oder im Detail über das Modul 1 unserer Premium-Pipeline.
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
         st.info("💡 **Profi-Tipp:** Wenn dieser Schnelltest positiv ausfällt, schalten Sie in der linken Seitenleiste auf den Modus **Premium Valuation Pipeline** um, um das vollumfängliche Banken-Audit zu starten.")
 
 elif "1. Standort & Mikrolage" in menue:
@@ -436,7 +474,7 @@ elif "5. Cashflow & Leverage Engine" in menue:
         if immo_zustand == "Denkmalschutz / Sanierung":
             st.warning("⚡ **Denkmal-Modus aktiv:** Das System hat das Profi-Steuerpanel unten automatisch für die Sanierungs-AfA nach § 7i EStG freigeschaltet!")
         else:
-            st.info(f"💡 **Asset-Szenario:** Berechnungen basieren auf den gesetzlichen Abschreibungssätzen für {immo_zustand}.")
+            st.info(f"💡 **Asset-Szenario:** Berechnungen basieren on den gesetzlichen Abschreibungssätzen für {immo_zustand}.")
 
     with st.expander("⚙️ Tax & Compliance Engine (AfA / Steuern)", expanded=True):
         col_p1, col_p2, col_p3 = st.columns(3)
@@ -489,7 +527,7 @@ elif "6. Executive Pitch Deck" in menue:
     st.divider()
     
     if not (st.session_state.ertragswert_ergebnis and st.session_state.sachwert_ergebnis and st.session_state.rendite_ergebnis):
-        st.warning("⚠️ Der Report ist unvollständig. Bitte durchlaufen Sie die Valuation Pipeline (Schritte 3-5), um die Daten zu generieren.")
+        st.warning("⚠️ Der Report ist unvollständig. Bitte durchlaufen Sie die Valuation Pipeline (Schritte 3-5), um die Daten die generieren.")
     else:
         ew = st.session_state.ertragswert_ergebnis; sw = st.session_state.sachwert_ergebnis; re = st.session_state.rendite_ergebnis
         st.markdown("### Valuation-Profil (ImmoWertV)")
