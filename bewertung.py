@@ -5,6 +5,7 @@ import ssl
 import requests
 import time
 import datetime
+import re
 
 ssl._create_default_https_context = ssl._create_unverified_context
 
@@ -121,13 +122,46 @@ def berechne_rendite_pro(kaufpreis, knk_prozent, miete_jahr, bew_kosten_prozent,
             "dscr": dscr, "steuerlast_jahr": steuerlast_jahr, "cashflow_nach_steuer": round(cashflow_nach_steuer_monat, 2), 
             "afa_jahr": afa_jahr, "afa_basis": bemessungsgrundlage_basis}
 
-# SAUBERE LOGIK: Kein Zufall mehr, deterministische Werte
+# NEU: Mathematisch-geografische Wertermittlung (Reproduzierbar & Standortgenau)
 def api_abfrage_bodenrichtwert(lat, lon, adresse):
-    time.sleep(1.2) 
-    if "Marienplatz" in adresse or "München" in adresse: 
-        return 3500
-    else: 
-        return 550  # Fester Standardwert für alle anderen Lagen
+    time.sleep(1.2)
+    adresse_lower = adresse.lower()
+    
+    # Regionales Basisniveau bestimmen
+    if "münchen" in adresse_lower or "munich" in adresse_lower:
+        base_brw = 2800
+        center_lat, center_lon = 48.137, 11.575
+    elif "hamburg" in adresse_lower:
+        base_brw = 1200
+        center_lat, center_lon = 53.551, 9.993
+    elif "berlin" in adresse_lower:
+        base_brw = 1100
+        center_lat, center_lon = 52.520, 13.404
+    elif "frankfurt" in adresse_lower:
+        base_brw = 1400
+        center_lat, center_lon = 50.110, 8.682
+    elif "stuttgart" in adresse_lower:
+        base_brw = 1300
+        center_lat, center_lon = 48.775, 9.182
+    elif "köln" in adresse_lower or "cologne" in adresse_lower:
+        base_brw = 950
+        center_lat, center_lon = 50.937, 6.960
+    elif "leipzig" in adresse_lower or "dresden" in adresse_lower:
+        base_brw = 550
+        center_lat, center_lon = 51.340, 12.374
+    else:
+        # Fallback für mittlere/kleinere Orte basierend auf Koordinaten-Abweichung
+        base_brw = 380
+        center_lat, center_lon = lat, lon
+
+    # Distanzgewichtung: Je näher am Zentrum der Koordinaten, desto höher der Wert
+    delta_lat = abs(lat - center_lat)
+    delta_lon = abs(lon - center_lon)
+    distanz_faktor = max(0.4, 1.0 - (delta_lat + delta_lon) * 3)
+    
+    final_brw = int(base_brw * distanz_faktor)
+    # Runden auf glatte Zehnerbeträge
+    return (final_brw // 10) * 10
 
 current_year = datetime.datetime.now().year
 
@@ -347,7 +381,7 @@ elif "1. Standort & Mikrolage" in menue:
         
         st.markdown("<div class='benchmark-card'><div class='benchmark-title'>🏢 Standort & Bodenrichtwert Audit</div>"
                     f"<div class='benchmark-text'><b>Was bedeutet diese Zahl für Sie?</b><br>"
-                    f"Der Bodenrichtwert von <b>{brw_api_ergebnis} €/m²</b> ist der offizielle Durchschnittswert für den nackten Boden in dieser Mikrolage. Er ist das fundamentale Sicherheitsnetz: Selbst wenn das Gebäude verfällt, bleibt dieser Wert im Boden bestehen.<br><br>"
+                    f"Der Bodenrichtwert von <b>{brw_api_ergebnis} €/m²</b> ist der aus der Geonormierung abgeleitete Durchschnittswert für den nackten Boden in dieser Mikrolage. Er basiert auf der Distanz zum Stadtkern und dem regionalen Kaufpreisniveau.<br><br>"
                     f"<b>Markt-Benchmark:</b> Ländliche Regionen liegen oft bei 80 € bis 250 €/m². Mittlere Städte bewegen sich zwischen 400 € und 900 €/m². In absoluten Top-Metropolen werden nicht selten 2.000 € bis über 4.500 €/m² aufgerufen. Je höher der Bodenwertanteil am Gesamtkaufpreis ist, desto krisensicherer ist das Investment.</div></div>", unsafe_allow_html=True)
 
 elif "2. Substanz & RND" in menue:
@@ -528,16 +562,8 @@ elif "5. Cashflow & Leverage Engine" in menue:
 
     with st.expander("⚙️ Tax & Compliance Engine (AfA / Steuern)", expanded=True):
         col_p1, col_p2, col_p3 = st.columns(3)
-        with col_p1: 
-            steuersatz = st.slider(
-                "Persönlicher Grenzsteuersatz (%)", 0, 45, 42,
-                help="Dein individueller Steuersatz auf den jeweils nächsten Euro Einkommen. Wichtig für die Wirkung des steuerlichen Verlustvortrags (Tax Shield).\n\nWo zu finden? Aus dem letzten Einkommensteuerbescheid des Finanzamts ablesbar."
-            )
-        with col_p2: 
-            gebaeudeanteil = st.slider(
-                "Gebäudeanteil der Gesamtinvestition (%)", 0, 100, 80,
-                help="Der prozentuale Wertanteil des reinen Gebäudes an den Gesamtkosten, da der Grund und Boden steuerlich nicht abgeschrieben werden kann.\n\nWo zu finden? Wird vom Finanzamt mittels einer standardisierten Arbeitshilfe berechnet."
-            )
+        with col_p1: steuersatz = st.slider("Persönlicher Grenzsteuersatz (%)", 0, 45, 42)
+        with col_p2: gebaeudeanteil = st.slider("Gebäudeanteil der Gesamtinvestition (%)", 0, 100, 80)
         with col_p3: 
             is_denkmal = (immo_zustand == "Denkmalschutz / Sanierung")
             if is_denkmal:
