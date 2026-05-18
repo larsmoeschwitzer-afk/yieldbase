@@ -9,7 +9,7 @@ import datetime
 
 ssl._create_default_https_context = ssl._create_unverified_context
 
-st.set_page_config(page_title="YieldBase | Real Estate Analytics", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="YieldBase | Real Estate Analytics", layout="wide", initial_sidebar_state="auto")
 
 # --- 0. MODERN SAAS CSS DESIGN ---
 st.markdown("""
