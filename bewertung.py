@@ -72,7 +72,7 @@ def berechne_sachwert(bgf, nhk, regionalfaktor, baupreisindex, awm_prozent, bode
     gebaeudesachwert = herstellungskosten - (herstellungskosten * (awm_prozent / 100))
     vorlaeufiger_sachwert = gebaeudesachwert + bodenwert
     marktsachwert = vorlaeufiger_sachwert * sachwertfaktor
-    return marktsachwert, gebaeudesachwert, herstellungskosten, vorlaeufiger_sachwert
+    return marktsachwert, gebaeude_sw, herstellungskosten, vorlaeufiger_sachwert
 
 def berechne_rendite_pro(kaufpreis, knk_prozent, miete_jahr, bew_kosten_prozent, ek_prozent, zins_prozent, 
                         tilgung_prozent, steuersatz, afa_regulaer_satz, gebaeudeanteil, 
@@ -171,8 +171,9 @@ with st.sidebar:
         st.divider()
         st.markdown("#### Globale System-Variablen")
         
-        # FIX: Das Eingabefeld nutzt nun direkt st.session_state.rnd_kalibriert als Steuerung ohne Absturzgefahr
-        rnd_eingabe_sidebar = st.number_input("Restnutzungsdauer (RND):", min_value=1, max_value=100, key="rnd_kalibriert")
+        # FIX: Wert wird über value geladen, getrennt vom Widget-Key zur Laufzeit-Sicherheit
+        rnd_eingabe_sidebar = st.number_input("Restnutzungsdauer (RND):", min_value=1, max_value=100, value=int(st.session_state.rnd_kalibriert), key="rnd_widget_input")
+        st.session_state.rnd_kalibriert = rnd_eingabe_sidebar
         st.write(f"Aktueller Bodenwert: **{st.session_state.bodenrichtwert_api} €/m²**")
         st.divider()
     else:
@@ -322,7 +323,7 @@ elif "2. Substanz & RND" in menue:
     neue_rnd = min(gnd, basis_rnd + zusatz_jahre)
     st.info(f"Substanz-Rating: **{grad}** (Wirtschaftlicher Lebenszyklus verlängert sich um {zusatz_jahre} Jahre)")
     
-    # FIX: Setzt den internen Wert direkt im session_state fest
+    # FIX: Das Überschreiben erfolgt nun direkt auf der Variablen ohne Widget-Konflikt
     if st.button("Restnutzungsdauer kalibrieren", type="primary"):
         st.session_state.rnd_kalibriert = neue_rnd
         st.rerun()
@@ -339,100 +340,4 @@ elif "3. Ertragswert (ImmoWertV)" in menue:
         zins = st.number_input("Liegenschaftszins p.a. (%)", min_value=0.1, max_value=15.0, value=default_zins, step=0.1)
     with col_b:
         flaeche = st.number_input("Grundstücksfläche (m²)", min_value=0, value=500, step=50)
-        brw = st.number_input("Bodenrichtwert (€/m²)", min_value=0, value=st.session_state.bodenrichtwert_api, step=10)
-        
-    if st.button("Ertragswert generieren", type="primary"):
-        aktueller_rbf = berechne_rbf(zins, st.session_state.rnd_kalibriert)
-        gesamtwert, bodenwert = berechne_ertragswert(miete, bew_kosten, flaeche, brw, zins, aktueller_rbf)
-        st.session_state.ertragswert_ergebnis = {"gesamt": gesamtwert, "boden": bodenwert, "rbf": aktueller_rbf}
-        
-    if st.session_state.ertragswert_ergebnis:
-        res = st.session_state.ertragswert_ergebnis
-        st.markdown("### Mitglieds-Ergebnis")
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Kapitalisierungsfaktor", res['rbf'])
-        c2.metric("Bodenwertanteil", f"{res['boden']:,.0f} €".replace(",", "."))
-        c3.metric("Vorläufiger Ertragswert", f"{res['gesamt']:,.0f} €".replace(",", "."))
-
-elif "4. Sachwert (ImmoWertV)" in menue:
-    st.image("https://images.unsplash.com/photo-1504307651254-35680f356dfd?ixlib=rb-4.0.3&auto=format&fit=crop&w=1600&h=400&q=80", use_container_width=True)
-    st.title("Premium Valuation: 4. Sachwert nach ImmoWertV")
-    st.divider()
-    if immo_zustand == "Neubau": default_nhk = 2200
-    elif immo_zustand == "Denkmalschutz / Sanierung": default_nhk = 1200
-    else: default_nhk = 1600
-        
-    col_s1, col_s2 = st.columns(2, gap="large")
-    with col_s1:
-        bgf = st.number_input("Bruttogrundfläche (BGF m²)", min_value=0, value=250, step=10)
-        gnd_eingabe = st.number_input("Gesamtnutzungsdauer (GND)", min_value=40, max_value=100, value=80, step=10)
-        nhk = st.number_input("Normalherstellungskosten (€/m²)", min_value=500, value=default_nhk, step=50)
-    with col_s2:
-        bpi = st.number_input("Baupreisindex (Destatis 2015=100)", min_value=50.0, value=145.5, step=1.0)
-        regio = st.number_input("Regionaler Marktanpassungsfaktor", min_value=0.5, value=1.05, step=0.01)
-        boden = st.number_input("Bodenwert (€)", min_value=0, value=int(500 * st.session_state.bodenrichtwert_api), step=1000)
-    
-    st.divider()
-    swf = st.number_input("Sachwertfaktor (Marktanpassung laut Gutachterausschuss)", min_value=0.1, max_value=2.0, value=1.0, step=0.05)
-        
-    if st.button("Substanzwert berechnen", type="primary"):
-        awm_prozent = berechne_awm(st.session_state.rnd_kalibriert, gnd_eingabe)
-        gesamt_sw, gebaeude_sw, hk, vor_sw = berechne_sachwert(bgf, nhk, regio, bpi, awm_prozent, boden, swf)
-        st.session_state.sachwert_ergebnis = {"gesamt": gesamt_sw, "gebaeude": gebaeude_sw, "hk": hk, "awm": awm_prozent, "vor_sw": vor_sw}
-        
-    if st.session_state.sachwert_ergebnis:
-        res = st.session_state.sachwert_ergebnis
-        st.markdown("### Bewertungs-Ergebnis")
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Vorläufiger Sachwert", f"{res['vor_sw']:,.0f} €".replace(",", "."))
-        c2.metric(f"Wertminderung (AWM)", f"{res['awm']} %")
-        c3.metric("Markt-Sachwert (inkl. Faktor)", f"{res['gesamt']:,.0f} €".replace(",", "."))
-
-elif "5. Cashflow & Leverage Engine" in menue:
-    st.image("https://images.unsplash.com/photo-1460925895917-afdab827c52f?ixlib=rb-4.0.3&auto=format&fit=crop&w=1600&h=400&q=80", use_container_width=True)
-    st.title("Premium Valuation: 5. Cashflow & Leverage Engine")
-    st.divider()
-    col_r1, col_r2, col_r3 = st.columns(3, gap="medium")
-    with col_r1:
-        st.markdown("#### Deal-Struktur")
-        kaufpreis = st.number_input("Angebotspreis (€)", min_value=0, value=750000, step=10000)
-        knk = st.slider("Transaktionskosten (KNK %)", 0.0, 15.0, 8.5, step=0.1)
-        miete = st.number_input("Kaltmiete p.a. (€)", min_value=0, value=24000, step=1000)
-        bew_kosten = st.slider("OpEx / Bewirtschaftung (%)", 0.0, 30.0, default_bew, step=1.0)
-    with col_r2:
-        st.markdown("#### Debt / Fremdkapital")
-        ek = st.slider("Eigenkapital-Quote (%)", 10.0, 100.0, 20.0, step=1.0)
-        zins = st.number_input("Fremdkapitalzins p.a. (%)", min_value=0.1, max_value=10.0, value=3.8, step=0.1)
-        tilgung = st.number_input("Tilgungssatz p.a. (%)", min_value=0.0, max_value=10.0, value=2.0, step=0.1)
-    with col_r3:
-        if immo_zustand == "Denkmalschutz / Sanierung":
-            st.warning("⚡ **Denkmal-Modus aktiv:** Das System hat das Profi-Steuerpanel unten automatisch für die Sanierungs-AfA nach § 7i EStG freigeschaltet!")
-        else:
-            st.info(f"💡 **Asset-Szenario:** Berechnungen basieren auf den gesetzlichen Abschreibungssätzen für {immo_zustand}.")
-
-    with st.expander("⚙️ Tax & Compliance Engine (AfA / Steuern)", expanded=True):
-        col_p1, col_p2, col_p3 = st.columns(3)
-        with col_p1: steuersatz = st.slider("Persönlicher Grenzsteuersatz (%)", 0, 45, 42)
-        with col_p2: gebaeudeanteil = st.slider("Gebäudeanteil der Gesamtinvestition (%)", 0, 100, 80)
-        with col_p3: 
-            is_denkmal = (immo_zustand == "Denkmalschutz / Sanierung")
-            if is_denkmal:
-                denkmal_sanierungsanteil = st.slider("Anteil Sanierungskosten am Gebäude (%)", 10, 90, 60)
-                afa_denkmal_satz = st.number_input("Denkmal-AfA p.a. (Jahre 1-8: 9%)", min_value=0.0, max_value=15.0, value=9.0, step=0.5)
-                afa_regulaer_satz = 2.0
-            else:
-                denkmal_sanierungsanteil = 0; afa_denkmal_satz = 0
-                afa_regulaer_satz = st.number_input(f"Reguläre Gebäude-AfA p.a. (Vorschlag für {immo_zustand})", min_value=0.0, max_value=15.0, value=default_afa, step=0.5)
-
-    if st.button("Cashflow-Modell generieren", type="primary"):
-        res = berechne_rendite_pro(kaufpreis, knk, miete, bew_kosten, ek, zins, tilgung, steuersatz, 
-                                   afa_regulaer_satz, gebaeudeanteil, is_denkmal, 
-                                   denkmal_sanierungsanteil, afa_denkmal_satz)
-        st.session_state.rendite_ergebnis = res
-        
-    if st.session_state.rendite_ergebnis:
-        res = st.session_state.rendite_ergebnis
-        st.write("### 1. Performance-Metriken")
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Return on Equity (ROE)", f"{res['ek_rendite']} %")
-        dscr = res
+        brw = st.number_input("Bodenrichtwert (€
