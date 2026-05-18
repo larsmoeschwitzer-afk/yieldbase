@@ -4,7 +4,6 @@ from geopy.geocoders import Nominatim
 import ssl
 import requests
 import time
-import random
 import datetime
 
 ssl._create_default_https_context = ssl._create_unverified_context
@@ -122,12 +121,13 @@ def berechne_rendite_pro(kaufpreis, knk_prozent, miete_jahr, bew_kosten_prozent,
             "dscr": dscr, "steuerlast_jahr": steuerlast_jahr, "cashflow_nach_steuer": round(cashflow_nach_steuer_monat, 2), 
             "afa_jahr": afa_jahr, "afa_basis": bemessungsgrundlage_basis}
 
+# SAUBERE LOGIK: Kein Zufall mehr, deterministische Werte
 def api_abfrage_bodenrichtwert(lat, lon, adresse):
     time.sleep(1.2) 
     if "Marienplatz" in adresse or "München" in adresse: 
         return 3500
     else: 
-        return random.choice([350, 420, 550, 800, 1200, 150])
+        return 550  # Fester Standardwert für alle anderen Lagen
 
 current_year = datetime.datetime.now().year
 
