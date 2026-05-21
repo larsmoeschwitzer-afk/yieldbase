@@ -1,593 +1,1149 @@
-import streamlit as st
-import pandas as pd
-from geopy.geocoders import Nominatim
-import ssl
-import requests
-import time
-import datetime
-
-ssl._create_default_https_context = ssl._create_unverified_context
-
-st.set_page_config(page_title="YieldBase | Real Estate Analytics", layout="wide", initial_sidebar_state="auto")
-
-# --- 0. MODERN SAAS CSS DESIGN ---
-st.markdown("""
-    <style>
-    h1, h2, h3 { font-family: 'Inter', sans-serif; letter-spacing: -0.025em; font-weight: 600; }
-    [data-testid="stMetric"] { background-color: #ffffff; border: 1px solid #e2e8f0; padding: 1.5rem; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); transition: transform 0.2s ease, box-shadow 0.2s ease; }
-    [data-testid="stMetric"]:hover { transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(0,0,0,0.05); }
-    [data-testid="stMetricValue"] { font-weight: 700; color: #0f172a; }
-    div.stButton > button[kind="primary"] { background: linear-gradient(135deg, #4f46e5 0%, #06b6d4 100%) !important; color: white !important; border-radius: 8px; font-weight: 600; padding: 0.75rem 1.5rem; transition: all 0.3s ease; border: none; width: 100%; box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.2); }
-    div.stButton > button[kind="primary"]:hover { box-shadow: 0 20px 25px -5px rgba(6, 182, 212, 0.3); transform: translateY(-2px); }
-    hr { margin-top: 2rem; margin-bottom: 2rem; border-color: rgba(128, 128, 128, 0.1); }
-    [data-testid="stImage"] img { border-radius: 12px; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1); margin-bottom: 1.5rem; }
-    .trust-badge { font-size: 0.8rem; color: #64748b; margin-bottom: 0.2rem; display: flex; align-items: center; gap: 0.5rem; }
-    .legal-text { font-size: 0.75rem; color: #64748b; line-height: 1.4; }
-    .legal-box { background-color: #f8fafc; border-left: 4px solid #cbd5e1; padding: 1rem; border-radius: 4px; margin-top: 2rem; }
-    .indicator-card { padding: 1rem; border-radius: 8px; font-weight: bold; text-align: center; color: white; }
-    .indicator-green { background-color: #10b981; }
-    .indicator-yellow { background-color: #f59e0b; }
-    .indicator-red { background-color: #ef4444; }
-    .benchmark-card { background-color: #f8fafc; border-left: 4px solid #4f46e5; padding: 1rem; border-radius: 4px; margin-top: 0.75rem; margin-bottom: 1.5rem; }
-    .benchmark-title { font-weight: 600; color: #1e1b4b; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.4rem; }
-    .benchmark-text { font-size: 0.85rem; color: #334155; line-height: 1.4; }
-    </style>
-    """, unsafe_allow_html=True)
-
-# --- 1. PERSISTENT GLOBAL STORAGE ---
-if 'rnd_kalibriert' not in st.session_state: st.session_state.rnd_kalibriert = 40
-if 'ertragswert_ergebnis' not in st.session_state: st.session_state.ertragswert_ergebnis = None
-if 'sachwert_ergebnis' not in st.session_state: st.session_state.sachwert_ergebnis = None
-if 'rendite_ergebnis' not in st.session_state: st.session_state.rendite_ergebnis = None
-if 'bodenrichtwert_api' not in st.session_state: st.session_state.bodenrichtwert_api = 800
-
-if 'qc_preis_val' not in st.session_state: st.session_state.qc_preis_val = 350000
-if 'qc_miete_val' not in st.session_state: st.session_state.qc_miete_val = 1200
-if 'qc_flaeche_val' not in st.session_state: st.session_state.qc_flaeche_val = 75
-if 'qc_knk_val' not in st.session_state: st.session_state.qc_knk_val = 8.5
-if 'opt_hausgeld_val' not in st.session_state: st.session_state.opt_hausgeld_val = 0
-if 'opt_sollmiete_val' not in st.session_state: st.session_state.opt_sollmiete_val = 0
-if 'opt_grundstueck_val' not in st.session_state: st.session_state.opt_grundstueck_val = 0
-
-if 's_adresse' not in st.session_state: st.session_state.s_adresse = "Marienplatz 1, 80331 München"
-if 's_baujahr' not in st.session_state: st.session_state.s_baujahr = 1975
-if 's_gnd' not in st.session_state: st.session_state.s_gnd = 80
-if 's_mod_dach' not in st.session_state: st.session_state.s_mod_dach = 0
-if 's_mod_fenster' not in st.session_state: st.session_state.s_mod_fenster = 0
-if 's_mod_hz' not in st.session_state: st.session_state.s_mod_hz = 0
-if 's_mod_sanitaer' not in st.session_state: st.session_state.s_mod_sanitaer = 0
-if 's_mod_innen' not in st.session_state: st.session_state.s_mod_innen = 0
-
-if 's_ew_miete' not in st.session_state: st.session_state.s_ew_miete = 24000
-if 's_ew_bew' not in st.session_state: st.session_state.s_ew_bew = 15.0
-if 's_ew_zins' not in st.session_state: st.session_state.s_ew_zins = 3.8
-if 's_ew_flaeche' not in st.session_state: st.session_state.s_ew_flaeche = 500
-
-if 's_sw_bgf' not in st.session_state: st.session_state.s_sw_bgf = 250
-if 's_sw_gnd' not in st.session_state: st.session_state.s_sw_gnd = 80
-if 's_sw_nhk' not in st.session_state: st.session_state.s_sw_nhk = 1600
-if 's_sw_bpi' not in st.session_state: st.session_state.s_sw_bpi = 145.5
-if 's_sw_regio' not in st.session_state: st.session_state.s_sw_regio = 1.05
-if 's_sw_boden' not in st.session_state: st.session_state.s_sw_boden = 400000
-if 's_sw_swf' not in st.session_state: st.session_state.s_sw_swf = 1.0
-
-if 's_le_kaufpreis' not in st.session_state: st.session_state.s_le_kaufpreis = 750000
-if 's_le_knk' not in st.session_state: st.session_state.s_le_knk = 8.5
-if 's_le_miete' not in st.session_state: st.session_state.s_le_miete = 24000
-if 's_le_bew' not in st.session_state: st.session_state.s_le_bew = 15.0
-if 's_le_ek' not in st.session_state: st.session_state.s_le_ek = 20.0
-if 's_le_zins' not in st.session_state: st.session_state.s_le_zins = 3.8
-if 's_le_tilgung' not in st.session_state: st.session_state.s_le_tilgung = 2.0
-if 's_le_steuersatz' not in st.session_state: st.session_state.s_le_steuersatz = 42
-if 's_le_gebaeudeanteil' not in st.session_state: st.session_state.s_le_gebaeudeanteil = 80
-if 's_le_denkmal_san' not in st.session_state: st.session_state.s_le_denkmal_san = 60
-if 's_le_denkmal_afa' not in st.session_state: st.session_state.s_le_denkmal_afa = 9.0
-if 's_le_reg_afa' not in st.session_state: st.session_state.s_le_reg_afa = 2.0
-
-# --- 2. BACKEND ENGINE ---
-def berechne_rbf(liegenschaftszins, restnutzungsdauer):
-    if liegenschaftszins <= 0: return 0 
-    q = 1 + (liegenschaftszins / 100); n = restnutzungsdauer
-    if n == 0: return 0
-    return round((q**n - 1) / ((q**n) * (q - 1)), 2)
-
-def berechne_awm(restnutzungsdauer, gesamtnutzungsdauer):
-    if gesamtnutzungsdauer <= 0: return 0
-    return round((1 - (restnutzungsdauer / gesamtnutzungsdauer)) * 100, 2)
-
-def berechne_modernisierungsgrad(punkte):
-    if punkte <= 4: return "Nicht oder unwesentlich", 0
-    elif punkte <= 11: return "Teilmodernisiert", 10
-    elif punkte <= 15: return "Überwiegend", 20
-    else: return "Umfassend", 30
-
-def berechne_ertragswert(miete_jahr, bewirtschaftung_prozent, flaeche, bodenrichtwert, liegenschaftszins, rbf):
-    bodenwert = flaeche * bodenrichtwert
-    reinertrag = miete_jahr - (miete_jahr * (bewirtschaftung_prozent / 100))
-    bodenwertverzinsung = bodenwert * (liegenschaftszins / 100)
-    gebaeude_reinertrag = reinertrag - bodenwertverzinsung
-    gebaeude_wert_anteil = max(0, gebaeude_reinertrag) * rbf
-    return bodenwert + gebaeude_wert_anteil, bodenwert, gebaeude_reinertrag
-
-def berechne_sachwert(bgf, nhk, regionalfaktor, baupreisindex, awm_prozent, bodenwert, sachwertfaktor):
-    herstellungskosten = bgf * nhk * regionalfaktor * (baupreisindex / 100)
-    gebaeudesachwert = herstellungskosten - (herstellungskosten * (awm_prozent / 100))
-    vorlaeufiger_sachwert = gebaeudesachwert + bodenwert
-    marktsachwert = vorlaeufiger_sachwert * sachwertfaktor
-    return marktsachwert, gebaeudesachwert, herstellungskosten, vorlaeufiger_sachwert
-
-def berechne_rendite_pro(kaufpreis, knk_prozent, miete_jahr, bew_kosten_prozent, ek_prozent, zins_prozent, 
-                        tilgung_prozent, steuersatz, afa_regulaer_satz, gebaeudeanteil, 
-                        ist_denkmal, denkmal_sanierungsanteil, afa_denkmal_satz):
-    if kaufpreis <= 0: return {}
-    
-    gesamt_inv = kaufpreis * (1 + (knk_prozent / 100))
-    netto_miete_jahr = miete_jahr * (1 - (bew_kosten_prozent / 100))
-    bruttorendite = (miete_jahr / kaufpreis) * 100
-    nettorendite = (netto_miete_jahr / gesamt_inv) * 100 if gesamt_inv > 0 else 0
-    faktor = kaufpreis / miete_jahr if miete_jahr > 0 else 0
-    eigenkapital = gesamt_inv * (ek_prozent / 100)
-    darlehen = gesamt_inv - eigenkapital
-    zinslast_jahr = darlehen * (zins_prozent / 100)
-    tilgung_jahr = darlehen * (tilgung_prozent / 100)
-    kapitaldienst_jahr = zinslast_jahr + tilgung_jahr
-    dscr = round(netto_miete_jahr / kapitaldienst_jahr, 2) if kapitaldienst_jahr > 0 else "∞"
-    
-    bemessungsgrundlage_basis = gesamt_inv * (gebaeudeanteil / 100)
-    if ist_denkmal:
-        sanierungs_summe = bemessungsgrundlage_basis * (denkmal_sanierungsanteil / 100)
-        altbau_substanz_summe = bemessungsgrundlage_basis - sanierungs_summe
-        afa_jahr_substanz = altbau_substanz_summe * 0.02
-        afa_jahr_denkmal = sanierungs_summe * (afa_denkmal_satz / 100)
-        afa_jahr = afa_jahr_substanz + afa_jahr_denkmal
-    else:
-        afa_jahr = bemessungsgrundlage_basis * (afa_regulaer_satz / 100)
-        
-    steuerliches_ergebnis = netto_miete_jahr - zinslast_jahr - afa_jahr
-    steuerlast_jahr = steuerliches_ergebnis * (steuersatz / 100) 
-    cashflow_monat_vor_steuer = (netto_miete_jahr - kapitaldienst_jahr) / 12
-    cashflow_nach_steuer_monat = cashflow_monat_vor_steuer - (steuerlast_jahr / 12)
-    gewinn_nach_zinsen = netto_miete_jahr - zinslast_jahr
-    ek_rendite = (gewinn_nach_zinsen / eigenkapital) * 100 if eigenkapital > 0 else 0
-    
-    return {"gesamt_inv": gesamt_inv, "brutto": round(bruttorendite, 2), "netto": round(nettorendite, 2), 
-            "faktor": round(faktor, 1), "ek": eigenkapital, "darlehen": darlehen, 
-            "cashflow_monat": round(cashflow_monat_vor_steuer, 2), "ek_rendite": round(ek_rendite, 2), 
-            "dscr": dscr, "steuerlast_jahr": steuerlast_jahr, "cashflow_nach_steuer": round(cashflow_nach_steuer_monat, 2), 
-            "afa_jahr": afa_jahr, "afa_basis": bemessungsgrundlage_basis}
-
-def api_abfrage_bodenrichtwert(lat, lon, adresse):
-    time.sleep(1.2)
-    adresse_lower = adresse.lower()
-    
-    is_munich_suburb = any(plz in adresse_lower for plz in ["82008", "82041", "82031", "85521", "85609", "85716", "85748", "82152"])
-    
-    if is_munich_suburb or "unterhaching" in adresse_lower or "taufkirchen" in adresse_lower:
-        base_brw = 2100  
-        is_speckguertel = True
-    elif "münchen" in adresse_lower or "munich" in adresse_lower:
-        base_brw = 2800
-        center_lat, center_lon = 48.137, 11.575
-        is_speckguertel = False
-    elif "hamburg" in adresse_lower:
-        base_brw = 1200
-        center_lat, center_lon = 53.551, 9.993
-        is_speckguertel = False
-    elif "berlin" in adresse_lower:
-        base_brw = 1100
-        center_lat, center_lon = 52.520, 13.404
-        is_speckguertel = False
-    elif "frankfurt" in adresse_lower:
-        base_brw = 1400
-        center_lat, center_lon = 50.110, 8.682
-        is_speckguertel = False
-    elif "leipzig" in adresse_lower or "dresden" in adresse_lower:
-        base_brw = 550
-        center_lat, center_lon = 51.340, 12.374
-        is_speckguertel = False
-    else:
-        base_brw = 380
-        center_lat, center_lon = lat, lon
-        is_speckguertel = False
-
-    if is_speckguertel:
-        final_brw = base_brw
-    else:
-        delta_lat = abs(lat - center_lat)
-        delta_lon = abs(lon - center_lon)
-        distanz_faktor = max(0.4, 1.0 - (delta_lat + delta_lon) * 3)
-        final_brw = int(base_brw * distanz_faktor)
-    
-    return (final_brw // 10) * 10
-
-current_year = datetime.datetime.now().year
-
-# --- 3. SIDEBAR NAVIGATION ---
-with st.sidebar:
-    logo_svg = """
-    <svg width="65" height="65" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style="margin-bottom: 8px;">
-        <defs>
-            <linearGradient id="cubeGrad" x1="0%" y1="100%" x2="100%" y2="0%">
-                <stop offset="0%" stop-color="#4f46e5" />
-                <stop offset="100%" stop-color="#06b6d4" />
-            </linearGradient>
-        </defs>
-        <path d="M 50 15 L 80 32 L 50 50 L 20 32 Z" fill="url(#cubeGrad)" opacity="0.85" />
-        <path d="M 20 32 L 50 50 L 50 85 L 35 77 L 35 58 L 20 50 Z" fill="#0f172a" />
-        <path d="M 80 32 L 50 50 L 50 85 L 65 77 L 65 58 L 80 50 Z" fill="url(#cubeGrad)" />
-    </svg>
-    """
-    st.markdown(logo_svg, unsafe_allow_html=True)
-    st.title("YieldBase")
-    st.caption("Analytik mit Substanz. Rendite mit System.")
-    st.markdown("<div class='trust-badge'>🛡️ ImmoWertV konform</div><div class='trust-badge'>🏦 Bankenstandard (DSCR)</div>", unsafe_allow_html=True)
-    st.divider()
-    
-    immo_klasse = st.selectbox("Immobilienart", ["Eigentumswohnung", "Mehrfamilienhaus", "Einfamilienhaus"])
-    immo_zustand = st.selectbox("Bauzustand / Epoche", ["Bestand (Altbau)", "Neubau", "Denkmalschutz / Sanierung"])
-    st.divider()
-    
-    if immo_zustand == "Neubau":
-        default_zins = 3.2; default_bew = 12.0; default_afa = 3.0
-    elif immo_zustand == "Bestand (Altbau)":
-        default_zins = 3.8; default_bew = 18.0; default_afa = 2.0
-    else: 
-        default_zins = 4.2; default_bew = 15.0; default_afa = 2.0
-        
-    if immo_klasse == "Mehrfamilienhaus": default_zins -= 0.3
-        
-    modus_auswahl = st.radio("Modus wechseln", ["Exposé Quick Check", "Premium Valuation Pipeline"])
-    st.divider()
-    
-    if modus_auswahl == "Premium Valuation Pipeline":
-        menue = st.radio("Kapitel wählen", [
-            "1. Standort & Mikrolage", 
-            "2. Substanz & RND", 
-            "3. Ertragswert (ImmoWertV)", 
-            "4. Sachwert (ImmoWertV)", 
-            "5. Cashflow & Leverage Engine", 
-            "6. Executive Pitch Deck"
-        ], label_visibility="collapsed")
-        st.divider()
-        st.markdown("#### Globale System-Variablen")
-        
-        rnd_eingabe_sidebar = st.number_input(
-            "Restnutzungsdauer (RND):", 
-            min_value=1, max_value=100, 
-            value=int(st.session_state.rnd_kalibriert), 
-            key="rnd_widget_input",
-            help="Der wirtschaftliche Lebenszyklus des Gebäudes. Wichtig für die Bestimmung des Ertragswert-Vervielfältigers (RBF).\n\nWo zu finden? Entnimmt man dem Verkehrswertgutachten. Kann andernfalls in Kapitel 2 über das integrierte Modernisierungs-Panel präzise hergeleitet werden."
-        )
-        st.session_state.rnd_kalibriert = rnd_eingabe_sidebar
-        st.write(f"Aktueller Bodenwert: **{st.session_state.bodenrichtwert_api} €/m²**")
-        st.divider()
-    else:
-        menue = "Exposé Quick Check"
-
-    with st.expander("⚖️ Rechtliche Hinweise & Impressum"):
-        st.markdown(f"""
-        <div class='legal-text'>
-        <b>Anbieterkennzeichnung gem. § 5 DDG:</b><br>
-        YieldBase Analytics & Systems<br>
-        Privates Analyse-Framework<br>
-        München, Deutschland<br><br>
-        <b>Urheberrecht & Urheberrechtsschutz:</b><br>
-        © {current_year} YieldBase. Alle Rechte vorbehalten. Die Softwarearchitektur, das visuelle Interface-Design sowie sämtliche zugrundeliegenden Berechnungsalgorithmen sind geschützt (§ 2, § 69a ff. UrhG). Jede unbefugte Vervielfältigung, Verbreitung oder Modifikation ist untersagt.<br><br>
-        <b>Datenschutz gem. DSGVO:</b><br>
-        Dieses Webtool speichert keine personenbezogenen Daten auf externen Servern. Eingegebene Adressdaten werden verschlüsselt (SSL) an OpenStreetMap übertragen.
+/**
+ * YieldBase v2 — Immobilien-Investment-Analyse
+ * Senior React Implementation — Production Grade
+ * Standalone-Komponente, keine externen Dependencies außer recharts
+ */
+ 
+import { useState, useMemo, useCallback } from "react";
+import {
+  AreaChart, Area, LineChart, Line, PieChart, Pie, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
+} from "recharts";
+ 
+// ─────────────────────────────────────────────────────────────────────────────
+// 1. DESIGN TOKENS
+// ─────────────────────────────────────────────────────────────────────────────
+ 
+const T = {
+  bg:       "#080d1a",
+  surface:  "#0d1526",
+  surface2: "#111f35",
+  surface3: "#162440",
+  border:   "#1e3054",
+  borderHi: "#2a4270",
+  gold:     "#c9a84c",
+  goldFaint:"rgba(201,168,76,0.12)",
+  green:    "#10b981",
+  greenFaint:"rgba(16,185,129,0.12)",
+  yellow:   "#f59e0b",
+  yellowFaint:"rgba(245,158,11,0.12)",
+  red:      "#ef4444",
+  redFaint: "rgba(239,68,68,0.12)",
+  blue:     "#3b82f6",
+  cyan:     "#06b6d4",
+  text:     "#e8eef7",
+  textMuted:"#8ba3c7",
+  textDim:  "#3d5a87",
+  mono:     "'Space Mono', 'Courier New', monospace",
+  serif:    "'DM Serif Display', Georgia, serif",
+  sans:     "'DM Sans', system-ui, sans-serif",
+};
+ 
+// ─────────────────────────────────────────────────────────────────────────────
+// 2. CALC ENGINE — alle KPIs als pure functions
+// ─────────────────────────────────────────────────────────────────────────────
+ 
+const r0 = v => Math.round(v);
+const r1 = v => Math.round(v * 10) / 10;
+const r2 = v => Math.round(v * 100) / 100;
+ 
+function fmtEUR(v) {
+  if (!isFinite(v)) return "—";
+  const a = Math.abs(v);
+  if (a >= 1_000_000) return `${(v / 1_000_000).toFixed(2).replace(".", ",")} Mio. €`;
+  return new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(v);
+}
+function fmtPct(v, dec = 2) {
+  if (!isFinite(v)) return "—";
+  return `${v.toFixed(dec).replace(".", ",")} %`;
+}
+function fmtX(v) {
+  if (!isFinite(v) || v > 99) return "> 99x";
+  return `${v.toFixed(1).replace(".", ",")}x`;
+}
+function fmtYr(v) {
+  if (!isFinite(v) || v > 99) return "< 0 / n.v.";
+  return `${v.toFixed(1).replace(".", ",")} J.`;
+}
+ 
+/**
+ * Instandhaltungsrücklage (IHR) nach Gebäudealter.
+ * Basis: % des Kaufpreises als pragmatische Näherung.
+ * HINWEIS: Methodisch korrekt wäre €/m²/Jahr auf Herstellungswert
+ * (Peters-Formel: HK × 1,5 / GND). In Teuerlagen (München, HH)
+ * überschätzt diese Methode die IHR, da KP >> HK. Nutzer sollten
+ * in solchen Märkten die Bewirtschaftungskosten-Quote entsprechend anpassen.
+ */
+function calcIHR(kaufpreis, baujahr) {
+  const age = 2025 - baujahr;
+  if (age < 10)  return kaufpreis * 0.003;   // Neubau/KfW: minimal
+  if (age < 25)  return kaufpreis * 0.006;   // Junger Bestand: gelegentliche Reparaturen
+  if (age < 40)  return kaufpreis * 0.010;   // Mittlerer Bestand: zyklische Erneuerungen
+  return kaufpreis * 0.013;                  // Altbau: laufend hoher Bedarf
+}
+ 
+/** IRR via Newton-Raphson (konvergiert für typische Immobilien-Cashflows) */
+function calcIRR(initialInvestment, cashflows) {
+  // initialInvestment = negativer EK-Einsatz
+  let rate = 0.08;
+  for (let i = 0; i < 300; i++) {
+    let f = initialInvestment, df = 0;
+    cashflows.forEach((c, t) => {
+      const p = Math.pow(1 + rate, t + 1);
+      f += c / p;
+      df -= (t + 1) * c / (p * (1 + rate));
+    });
+    if (Math.abs(df) < 1e-12) break;
+    const rn = rate - f / df;
+    if (Math.abs(rn - rate) < 1e-6) return rn * 100;
+    rate = Math.min(Math.max(rn, -0.999), 50);
+  }
+  return rate * 100;
+}
+ 
+/** NPV mit konstantem Diskontierungssatz */
+function calcNPV(initialInvestment, cashflows, rate) {
+  return cashflows.reduce(
+    (s, c, t) => s + c / Math.pow(1 + rate, t + 1),
+    initialInvestment
+  );
+}
+ 
+/**
+ * Master-Berechnung: alle KPIs aus einem Inputs-Objekt.
+ * Gibt ein flaches Ergebnis-Objekt zurück.
+ */
+function calcAll(inp) {
+  const {
+    kaufpreis, knk, jahresmiete, bew,
+    ek, zins, tilgung,
+    steuer, gebaeude,
+    isDenkmal, dkSan, dkAfa, regAfa,
+    baujahr, wertZuwachs, mietSteigerung,
+    leerstand, diskont,
+  } = inp;
+ 
+  // ── Transaktion ─────────────────────────────────────────────────────────
+  const grunderwerbsteuer  = kaufpreis * 0.035;
+  const notarGrundbuch     = kaufpreis * 0.020;
+  const makler             = Math.max(0, kaufpreis * ((knk - 5.5) / 100));
+  const knkAbs             = kaufpreis * (knk / 100);
+  const gesamt             = kaufpreis + knkAbs;
+ 
+  // ── Erträge ──────────────────────────────────────────────────────────────
+  const bewKosten    = jahresmiete * (bew / 100);
+  const leerstandAbs = jahresmiete * (leerstand / 100);
+  const ihr          = calcIHR(kaufpreis, baujahr);
+  // FIX (Bug 6): Einheitliche Basis — IHR in BEIDEN Größen enthalten.
+  // NOI (für Cap Rate): vor Finanzierung, inkl. IHR, ohne Leerstand (Marktstandard)
+  // nettoMiete (für DSCR/CF/Rendite): inkl. IHR + Leerstand (konservativ, bankenkonform)
+  const noi        = jahresmiete - bewKosten - ihr;
+  const nettoMiete = jahresmiete - bewKosten - leerstandAbs - ihr;
+ 
+  // ── Renditen ─────────────────────────────────────────────────────────────
+  const brutto    = kaufpreis > 0 ? r2((jahresmiete / kaufpreis) * 100) : 0;
+  const faktor    = jahresmiete > 0 ? r1(kaufpreis / jahresmiete) : 0;
+  const nettoRend = gesamt    > 0 ? r2((nettoMiete / gesamt)  * 100) : 0;
+  const capRate   = kaufpreis > 0 ? r2((noi       / kaufpreis) * 100) : 0;
+ 
+  // ── Finanzierung ─────────────────────────────────────────────────────────
+  const ekAbs    = gesamt * (ek / 100);
+  const fk       = gesamt - ekAbs;
+  const zinslast = fk * (zins / 100);
+  const tilgAbs  = fk * (tilgung / 100);
+  const kd       = zinslast + tilgAbs;  // Kapitaldienst
+  // FIX (Bug 1): LTV = FK / Kaufpreis (Marktwert), NICHT / Gesamtinvestition.
+  // Die Bank bewertet das Pfand (die Immobilie), nicht die Transaktionskosten des Käufers.
+  // KNK sind nach Kauf sofort wertlos als Sicherheit → Bank sieht nur den Kaufpreis.
+  const ltv      = r1(kaufpreis > 0 ? (fk / kaufpreis) * 100 : 0);
+  const dscr     = r2(kd > 0 ? nettoMiete / kd : 99);
+ 
+  // ── AfA (Steuerliche Abschreibung) ───────────────────────────────────────
+  const afaBasis = gesamt * (gebaeude / 100);
+  let afa;
+  if (isDenkmal) {
+    const san = afaBasis * (dkSan / 100);
+    afa = (afaBasis - san) * 0.02 + san * (dkAfa / 100);
+  } else {
+    afa = afaBasis * (regAfa / 100);
+  }
+ 
+  // ── Steuer & Cashflow ────────────────────────────────────────────────────
+  const stlErgebnis  = nettoMiete - zinslast - afa;
+  const steuerlast   = stlErgebnis * (steuer / 100);
+  const cfPreM       = r2((nettoMiete - kd) / 12);
+  const cfPostM      = r2((nettoMiete - kd - steuerlast) / 12);
+ 
+  // ── Return-Metriken ───────────────────────────────────────────────────────
+  const gewinnNachZinsen = nettoMiete - zinslast;
+  const roe              = r2(ekAbs > 0 ? (gewinnNachZinsen / ekAbs) * 100 : 0);
+  const roi              = r2(gesamt > 0 ? (nettoMiete / gesamt) * 100 : 0);
+ 
+  // ── Operative Kennzahlen ─────────────────────────────────────────────────
+  // FIX (Bug 3): Break-Even-Miete muss bew% UND leerstand% berücksichtigen.
+  // Formel: BEMiete × (1 - bew% - leerstand%) = kd
+  // → BEMiete = kd / (1 - bew% - leerstand%)
+  const kostensatz = (bew + leerstand) / 100;
+  const beMonat = r2((kostensatz < 1 && kd > 0)
+    ? (kd / (1 - kostensatz)) / 12
+    : 0);
+  const amort   = cfPostM * 12 > 0 ? r1(ekAbs / (cfPostM * 12)) : null;
+ 
+  // ── 10-Jahres-Projektion ─────────────────────────────────────────────────
+  // FIX (Bug 4): Korrektes Annuitätendarlehen-Modell.
+  // Die Annuität (= Zins + Tilgung) bleibt KONSTANT. Bei sinkendem Zinsanteil
+  // steigt der Tilgungsanteil — das ist das klassische deutsche Annuitätendarlehen.
+  // Annuität p.a. ≈ FK × (zins% + tilgung%) / 100
+  // Jedes Jahr: Zinsen = Restschuld × Zinssatz; Tilgung = Annuität - Zinsen
+  const annuitaet = fk * (zins + tilgung) / 100;  // fixe Jahresrate
+ 
+  const proj = [];
+  let debt    = fk;
+  let mBrutto = jahresmiete;
+  let iwert   = kaufpreis;
+  const irrCFs = [];
+  let cumCfPost = 0;  // für MOIC-Fix
+ 
+  for (let y = 1; y <= 10; y++) {
+    const mBew    = mBrutto * (bew / 100);
+    const mLeer   = mBrutto * (leerstand / 100);
+    const mIhr    = calcIHR(kaufpreis, baujahr);  // IHR bleibt konstant (nicht mietindexiert)
+    const mNetto  = mBrutto - mBew - mLeer - mIhr;
+ 
+    // Annuität: Zinsen auf Restschuld, Tilgung = Annuität − Zinsen
+    const yZins   = debt * (zins / 100);
+    const yTilg   = Math.min(debt, Math.max(0, annuitaet - yZins));
+    const yKd     = yZins + yTilg;
+ 
+    const yStl    = (mNetto - yZins - afa) * (steuer / 100);
+    const yCfPre  = mNetto - yKd;
+    const yCfPost = yCfPre - yStl;
+ 
+    cumCfPost += yCfPost;  // kumuliert für MOIC
+    debt   = Math.max(0, debt - yTilg);
+    iwert *= (1 + wertZuwachs / 100);
+    const eq = iwert - debt;
+    // IRR-CF: laufender Post-Tax-CF + im Jahr 10 realisierter Equity-Gewinn
+    irrCFs.push(yCfPost + (y === 10 ? Math.max(0, eq - ekAbs) : 0));
+    proj.push({
+      y: `J${y}`,
+      cfPre:    r0(yCfPre / 12), cfPost: r0(yCfPost / 12),
+      equity:   r0(eq), iwert: r0(iwert), schulden: r0(debt),
+    });
+    mBrutto *= (1 + mietSteigerung / 100);
+  }
+ 
+  let irrVal = 0;
+  try { irrVal = r2(calcIRR(-ekAbs, irrCFs)); } catch {}
+  const npvVal  = r0(calcNPV(-ekAbs, irrCFs, diskont / 100));
+ 
+  // FIX (Bug 2): MOIC = (kumulierte Cashflows + Terminal Equity) / initiales EK.
+  // Nur die finale Equity zu nehmen ignoriert alle laufenden Cashflow-Returns.
+  const finalEq = proj[9]?.equity ?? ekAbs;
+  const moic    = r2(ekAbs > 0 ? (cumCfPost + finalEq) / ekAbs : 0);
+ 
+  // ── Kostenstruktur (Donut-Chart) ─────────────────────────────────────────
+  const pie = [
+    { name: "Kaufpreis",         value: kaufpreis,      color: "#3b82f6" },
+    { name: "Grunderwerbsteuer", value: grunderwerbsteuer, color: "#c9a84c" },
+    { name: "Notar/Grundbuch",   value: notarGrundbuch, color: "#8b5cf6" },
+    { name: "Makler",            value: makler,         color: "#06b6d4" },
+  ].filter(d => d.value > 0);
+ 
+  return {
+    // Transaktion
+    knkAbs, grunderwerbsteuer, notarGrundbuch, makler, gesamt,
+    // Erträge
+    bewKosten, leerstandAbs, ihr, noi, nettoMiete,
+    // Renditen
+    brutto, faktor, nettoRend, capRate,
+    // Finanzierung
+    ekAbs, fk, zinslast, tilgAbs, kd, annuitaet, ltv, dscr,
+    // Steuer
+    afa, steuerlast, stlErgebnis,
+    // Cashflow
+    cfPreM, cfPostM,
+    // Returns
+    roe, roi,
+    // Operativ
+    beMonat, amort,
+    // Erweitert
+    irrVal, npvVal, moic,
+    // Zeitreihen
+    proj, pie,
+  };
+}
+ 
+/** Szenario-Varianten */
+function calcScenario(base, mode) {
+  if (mode === "optimistic") return calcAll({
+    ...base,
+    jahresmiete: base.jahresmiete * 1.10,
+    zins: Math.max(0.5, base.zins - 0.5),
+    leerstand: Math.max(0, base.leerstand - 1),
+    wertZuwachs: base.wertZuwachs + 1.5,
+  });
+  if (mode === "pessimistic") return calcAll({
+    ...base,
+    jahresmiete: base.jahresmiete * 0.90,
+    zins: base.zins + 0.8,
+    leerstand: base.leerstand + 3,
+    wertZuwachs: Math.max(0, base.wertZuwachs - 1.5),
+    bew: Math.min(35, base.bew + 3),
+  });
+  return calcAll(base);
+}
+ 
+// ─────────────────────────────────────────────────────────────────────────────
+// 3. AMPEL-LOGIK
+// ─────────────────────────────────────────────────────────────────────────────
+ 
+function getAmpel(key, val) {
+  const rules = {
+    brutto:    v => v >= 6 ? "green" : v >= 4    ? "yellow" : "red",
+    nettoRend: v => v >= 4.5 ? "green" : v >= 3  ? "yellow" : "red",
+    capRate:   v => v >= 5 ? "green" : v >= 3.5  ? "yellow" : "red",
+    faktor:    v => v <= 20 ? "green" : v <= 25  ? "yellow" : "red",
+    dscr:      v => v >= 1.3 ? "green" : v >= 1.1 ? "yellow" : "red",
+    ltv:       v => v <= 70 ? "green" : v <= 80  ? "yellow" : "red",
+    cfPreM:    v => v >= 0 ? "green" : v >= -150  ? "yellow" : "red",
+    cfPostM:   v => v >= 0 ? "green" : v >= -150  ? "yellow" : "red",
+    roe:       v => v >= 8 ? "green" : v >= 5    ? "yellow" : "red",
+    irrVal:    v => v >= 8 ? "green" : v >= 5    ? "yellow" : "red",
+    npvVal:    v => v >= 0 ? "green"              : "red",
+    moic:      v => v >= 2 ? "green" : v >= 1.5  ? "yellow" : "red",
+  };
+  const fn = rules[key];
+  return fn ? fn(val) : "yellow";
+}
+ 
+const AMP = {
+  green:  { color: T.green,  bg: T.greenFaint,  label: "Gut",       border: "rgba(16,185,129,0.25)" },
+  yellow: { color: T.yellow, bg: T.yellowFaint, label: "Akzeptabel",border: "rgba(245,158,11,0.25)" },
+  red:    { color: T.red,    bg: T.redFaint,    label: "Kritisch",  border: "rgba(239,68,68,0.25)" },
+};
+ 
+// ─────────────────────────────────────────────────────────────────────────────
+// 4. DEFAULT-STATE
+// ─────────────────────────────────────────────────────────────────────────────
+ 
+const DEFAULT = {
+  kaufpreis: 450000, knk: 8.5, jahresmiete: 16800, bew: 18,
+  ek: 25, zins: 3.8, tilgung: 2.0,
+  steuer: 42, gebaeude: 80,
+  isDenkmal: false, dkSan: 60, dkAfa: 9.0, regAfa: 2.0,
+  baujahr: 1975, wertZuwachs: 2.0, mietSteigerung: 1.5,
+  leerstand: 3, diskont: 5.0,
+};
+ 
+// ─────────────────────────────────────────────────────────────────────────────
+// 5. STILISIERTE PRIMITIVE
+// ─────────────────────────────────────────────────────────────────────────────
+ 
+// Beschrifteter Slider
+function SliderRow({ label, value, min, max, step = 1, unit = "", onChange, tooltip }) {
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 5 }}>
+        <label style={{ fontSize: 12, color: T.textMuted, fontFamily: T.sans, letterSpacing: "0.04em", textTransform: "uppercase" }}>
+          {label}
+          {tooltip && <span title={tooltip} style={{ cursor: "help", marginLeft: 4, color: T.textDim }}>ⓘ</span>}
+        </label>
+        <span style={{ fontFamily: T.mono, fontSize: 13, color: T.gold, fontWeight: 700 }}>
+          {typeof value === "number"
+            ? value % 1 === 0 ? value.toLocaleString("de-DE") : value.toFixed(step < 0.5 ? 1 : 0).replace(".", ",")
+            : value}
+          {unit && <span style={{ fontSize: 11, color: T.textDim, marginLeft: 2 }}>{unit}</span>}
+        </span>
+      </div>
+      <input
+        type="range" min={min} max={max} step={step}
+        value={value}
+        onChange={e => onChange(Number(e.target.value))}
+        style={{
+          width: "100%", height: 3, appearance: "none", background: `linear-gradient(to right, ${T.gold} ${((value - min) / (max - min)) * 100}%, ${T.border} 0%)`,
+          borderRadius: 4, cursor: "pointer", outline: "none",
+        }}
+      />
+      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 2 }}>
+        <span style={{ fontSize: 10, color: T.textDim }}>{min}{unit}</span>
+        <span style={{ fontSize: 10, color: T.textDim }}>{max}{unit}</span>
+      </div>
+    </div>
+  );
+}
+ 
+// Zahleneingabe
+function NumInput({ label, value, step = 1000, unit = "€", onChange, tooltip }) {
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <label style={{ display: "block", fontSize: 12, color: T.textMuted, fontFamily: T.sans, letterSpacing: "0.04em", textTransform: "uppercase", marginBottom: 5 }}>
+        {label}
+        {tooltip && <span title={tooltip} style={{ cursor: "help", marginLeft: 4, color: T.textDim }}>ⓘ</span>}
+      </label>
+      <div style={{ position: "relative" }}>
+        <input
+          type="number" value={value} step={step}
+          onChange={e => onChange(Number(e.target.value))}
+          style={{
+            width: "100%", background: T.surface3, border: `1px solid ${T.border}`, borderRadius: 6,
+            color: T.text, fontFamily: T.mono, fontSize: 14, padding: "8px 36px 8px 10px",
+            outline: "none", boxSizing: "border-box",
+          }}
+        />
+        <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", fontSize: 12, color: T.textDim }}>{unit}</span>
+      </div>
+    </div>
+  );
+}
+ 
+// Abschnittskopf
+function SectionHead({ label }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "22px 0 14px" }}>
+      <div style={{ height: 1, flex: 1, background: T.border }} />
+      <span style={{ fontFamily: T.sans, fontSize: 11, color: T.textDim, letterSpacing: "0.1em", textTransform: "uppercase", whiteSpace: "nowrap" }}>{label}</span>
+      <div style={{ height: 1, flex: 1, background: T.border }} />
+    </div>
+  );
+}
+ 
+// KPI-Karte mit Ampel
+function KpiCard({ label, value, subLabel, ampelKey, ampelVal, expert }) {
+  const ampelColor = ampelKey ? AMP[getAmpel(ampelKey, ampelVal ?? (typeof value === "number" ? value : 0))] : null;
+  return (
+    <div style={{
+      background: T.surface2,
+      border: `1px solid ${ampelColor ? ampelColor.border : T.border}`,
+      borderRadius: 10,
+      padding: "14px 16px",
+      position: "relative",
+      overflow: "hidden",
+    }}>
+      {ampelColor && (
+        <div style={{
+          position: "absolute", top: 0, left: 0, right: 0, height: 2,
+          background: ampelColor.color,
+        }} />
+      )}
+      <div style={{ fontSize: 11, color: T.textMuted, fontFamily: T.sans, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>
+        {label}
+      </div>
+      <div style={{ fontFamily: T.mono, fontSize: 20, fontWeight: 700, color: ampelColor ? ampelColor.color : T.text, lineHeight: 1.1 }}>
+        {value}
+      </div>
+      {subLabel && (
+        <div style={{ fontSize: 11, color: T.textDim, marginTop: 4, fontFamily: T.sans }}>
+          {subLabel}
         </div>
-        """, unsafe_allow_html=True)
-        
-    st.markdown(f"<div class='sidebar-branding'>Developed by YieldBase</div>", unsafe_allow_html=True)
-
-# --- 4. MAIN CONTENT ---
-if menue == "Exposé Quick Check":
-    st.image("https://images.unsplash.com/photo-1460925895917-afdab827c52f?ixlib=rb-4.0.3&auto=format&fit=crop&w=1600&h=400&q=80", use_container_width=True)
-    st.title("Exposé Quick Check")
-    st.markdown("Analysieren Sie Online-Angebote von Immobilienscout24 & Co. innerhalb von 60 Sekunden. Das System nutzt intelligente Voreinstellungen für unvollständige Daten.")
-    st.divider()
-    
-    col_q1, col_q2 = st.columns(2, gap="large")
-    with col_q1:
-        qc_preis = st.number_input("Kaufpreis laut Exposé (€)", min_value=0, value=int(st.session_state.qc_preis_val), step=10000, key="qc_p_widget", on_change=lambda: setattr(st.session_state, 'qc_preis_val', st.session_state.qc_p_widget), help="Der nackte Brutto-Verkaufspreis des Objekts ohne Nebenkosten.\n\nWo zu finden? Direkt auf der Startseite des Online-Inserats oder auf Seite 1 des Maklerexposés.")
-        qc_miete = st.number_input("Monatliche Ist-Kaltmiete (€)", min_value=0, value=int(st.session_state.qc_miete_val), step=50, key="qc_m_widget", on_change=lambda: setattr(st.session_state, 'qc_miete_val', st.session_state.qc_m_widget), help="Die aktuell vom Mieter gezahlte Nettokaltmiete pro Monat (ohne Heiz- und Betriebskosten).\n\nWo zu finden? Im Fließtext des Inserats unter 'Mieteinnahmen' oder direkt im aktuellen Mietvertrag.")
-    with col_q2:
-        qc_flaeche = st.number_input("Wohnfläche (m²)", min_value=1, value=int(st.session_state.qc_flaeche_val), step=5, key="qc_f_widget", on_change=lambda: setattr(st.session_state, 'qc_flaeche_val', st.session_state.qc_f_widget), help="Die reine nach WoFlV anrechenbare Wohnfläche des Objekts.\n\nWo zu finden? Im Inserats-Steckbrief, in der Wohnflächenberechnung des Architekten oder dem Mietvertrag.")
-        qc_knk = st.slider("Kaufnebenkosten-Schätzung (%)", 5.0, 15.0, value=float(st.session_state.qc_knk_val), step=0.5, key="qc_k_widget", on_change=lambda: setattr(st.session_state, 'qc_knk_val', st.session_state.qc_k_widget), help="Summe aus Grunderwerbsteuer (je nach Bundesland 3.5% bis 6.5%), Notar-/Gerichtskosten (ca. 1.5% - 2%) und optionaler Maklerprovision.")
-
-    with st.expander("➕ Optionale Exposé-Angaben hinzufügen (Überschreibt Erfahrungswerte)", expanded=True):
-        col_o1, col_o2 = st.columns(2)
-        with col_o1:
-            opt_hausgeld = st.number_input("Tatsächliches Hausgeld / nicht umlegbare OpEx (€/Monat)", min_value=0, value=int(st.session_state.opt_hausgeld_val), step=10, key="opt_h_widget", on_change=lambda: setattr(st.session_state, 'opt_hausgeld_val', st.session_state.opt_h_widget), help="Die monatlichen Kosten für Verwaltung und Instandhaltungsrücklage, die nicht auf den Mieter umgelegt werden können.\n\nWo zu finden? Im Maklerexposé oder gezielt anzufordern über die 'Einzelabrechnung des letzten Wirtschaftsjahres'.")
-            opt_sollmiete = st.number_input("Soll-Miete / Mietpotenzial p.a. (€)", min_value=0, value=int(st.session_state.opt_sollmiete_val), step=500, key="opt_s_widget", on_change=lambda: setattr(st.session_state, 'opt_sollmiete_val', st.session_state.opt_s_widget), help="Die realistische Marktmiete pro Jahr bei Neuvermietung oder Ausnutzung von Staffelmieten.\n\nWo zu finden? Lässt sich über den örtlichen Mietspiegel der Gemeinde oder eine Mietdatenbank-Abfrage ermitteln.")
-        with col_o2:
-            opt_grundstueck = st.number_input("Grundstücksfläche (m²)", min_value=0, value=int(st.session_state.opt_grundstueck_val), step=50, key="opt_g_widget", on_change=lambda: setattr(st.session_state, 'opt_grundstueck_val', st.session_state.opt_g_widget), help="Die absolute Quadratmetergröße des zugehörigen Grund und Bodens. Wichtig für die Substanzwerttrennung.\n\nWo zu finden? Im Inseratstext, dem amtlichen Lageplan oder im Bestandsverzeichnis du Grundbuchauszugs.")
-
-    if st.button("Exposé-Schnellprüfung ausführen", type="primary"):
-        if qc_preis <= 0 or qc_miete <= 0:
-            st.error("❌ **Eingabefehler:** Kaufpreis und monatliche Kaltmiete müssen größer als 0 sein, um eine Analyse durchzuführen.")
-        else:
-            jahresmiete = (opt_sollmiete if opt_sollmiete > 0 else qc_miete * 12)
-            reinertrag_jahr = jahresmiete - (opt_hausgeld * 12) if opt_hausgeld > 0 else jahresmiete * (1 - (default_bew / 100))
-            
-            bruttorendite = (jahresmiete / qc_preis) * 100
-            faktor = qc_preis / jahresmiete
-            quadratmeterpreis = qc_preis / qc_flaeche
-            
-            gesamtinvestition = qc_preis * (1 + (qc_knk / 100))
-            fremdkapital = gesamtinvestition * 0.80
-            kapitaldienst_jahr = fremdkapital * (0.04 + 0.02)
-            simulierter_cashflow_monat = (reinertrag_jahr - kapitaldienst_jahr) / 12
-            
-            st.markdown("### 📊 Indikatoren-Analyse")
-            c1, c2, c3 = st.columns(3)
-            c1.metric("Kaufpreisfaktor", f"{faktor:.1f} x")
-            c2.metric("Bruttorendite p.a.", f"{bruttorendite:.2f} %")
-            c3.metric("Quadratmeterpreis", f"{quadratmeterpreis:,.0f} €/m²".replace(",", "."))
-            
-            st.divider()
-            st.markdown("### Deal-Rating")
-            col_a1, col_a2 = st.columns(2)
-            with col_a1:
-                if faktor <= 22: st.markdown("<div class='indicator-card indicator-green'>🟢 ATTRAKTIVER EINSTIEGPREIS</div>", unsafe_allow_html=True)
-                elif faktor <= 28: st.markdown("<div class='indicator-card indicator-yellow'>🟡 MARKTÜBLICHER BESTANDSWERT</div>", unsafe_allow_html=True)
-                else: st.markdown("<div class='indicator-card indicator-red'>🔴 EXPANSIVER SPEKULATIONSPREIS</div>", unsafe_allow_html=True)
-            with col_a2:
-                if simulierter_cashflow_monat >= 50: st.markdown("<div class='indicator-card indicator-green'>🟢 POSITIVER CASHFLOW (EST.)</div>", unsafe_allow_html=True)
-                elif simulierter_cashflow_monat >= -50: st.markdown("<div class='indicator-card indicator-yellow'>🟡 CASHFLOW-NEUTRAL (EST.)</div>", unsafe_allow_html=True)
-                else: st.markdown("<div class='indicator-card indicator-red'>🔴 NEGATIVE LIQUIDITÄTS-BELASTUNG</div>", unsafe_allow_html=True)
-            
-            st.markdown("<div class='benchmark-card'><div class='benchmark-title'>💡 Quick Check Ergebnis-Audit & Benchmark</div>"
-                        f"<div class='benchmark-text'><b>Was bedeuten diese Zahlen für Sie?</b><br>"
-                        f"Ein Kaufpreisfaktor von <b>{faktor:.1f}x</b> bedeutet, dass die Immobilie {faktor:.1f} Jahre benötigt, um ihre Kosten rein über die Miete abzubezahlen. Im aktuellen Zinsumfeld gilt: Faktoren unter 22x finanzieren sich oft von selbst. Werte über 28x sind riskant, da die Miete die hohen Zinsen der Bank nicht decken kann.<br><br>"
-                        f"<b>Markt-Benchmark:</b> In deutschen B- und C-Lagen liegt der Schnitt aktuell bei 21x bis 25x. In A-Metropolen werden oft Faktoren von 28x bis 33x verlangt, was für Kleinanleger ohne massives Eigenkapital ein monatliches Zuzahlungsgeschäft bedeutet.</div></div>", unsafe_allow_html=True)
-
-elif "1. Standort & Mikrolage" in menue:
-    st.image("https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?ixlib=rb-4.0.3&auto=format&fit=crop&w=1600&h=400&q=80", use_container_width=True)
-    st.title("Premium Valuation: 1. Standort & Mikrolage")
-    st.divider()
-    
-    adresse = st.text_input("Vollständige Objektadresse", value=st.session_state.s_adresse, key="adr_w", on_change=lambda: setattr(st.session_state, 's_adresse', st.session_state.adr_w), help="Straße, Hausnummer, PLZ und Ort der Immobilie.\n\nWo zu finden? Im Exposé, Makleranschreiben oder Kaufvertragsentwurf. Zwingend notwendig für die exakte Georeferenzierung auf der Karte.")
-    
-    if st.button("Standortdaten & BRW abrufen", type="primary"):
-        lat_fallback, lon_fallback = 48.137, 11.575
-        geolocator = Nominatim(user_agent="YieldBase_Production_System")
-        try:
-            location = geolocator.geocode(adresse, timeout=4)
-            lat_final, lon_final = (location.latitude, location.longitude) if location else (lat_fallback, lon_fallback)
-        except Exception:
-            lat_final, lon_final = lat_fallback, lon_fallback
-                
-        brw_api_ergebnis = api_abfrage_bodenrichtwert(lat_final, lon_final, adresse)
-        st.session_state.bodenrichtwert_api = brw_api_ergebnis
-        st.success(f"**Verifiziert:** Der amtliche Bodenrichtwert beträgt **{brw_api_ergebnis} €/m²**.")
-        st.map(pd.DataFrame({'lat': [lat_final], 'lon': [lon_final]}), zoom=15)
-        
-        st.markdown("<div class='benchmark-card'><div class='benchmark-title'>🏢 Standort & Bodenrichtwert Audit</div>"
-                    f"<div class='benchmark-text'><b>Was bedeutet diese Zahl für Sie?</b><br>"
-                    f"Der Bodenrichtwert von <b>{brw_api_ergebnis} €/m²</b> ist der aus der Geonormierung abgeleitete Durchschnittswert für den nackten Boden in dieser Mikrolage. Er basiert auf der regionalen PLZ-Datenbank und schützt vor ungenauen Pauschalannahmen.<br><br>"
-                    f"<b>Markt-Benchmark:</b> Im direkten Münchner Speckgürtel werden regelhaft Werte von 1.500 € bis über 3.500 €/m² aufgerufen. Ländliche Regionen liegen oft bei 80 € bis 250 €/m². Je höher der reine Bodenwertanteil am Gesamtkaufpreis ist, desto krisensicherer ist das Sachwert-Fundament des Investments.</div></div>", unsafe_allow_html=True)
-
-elif "2. Substanz & RND" in menue:
-    st.image("https://images.unsplash.com/photo-1503387762-592deb58ef4e?ixlib=rb-4.0.3&auto=format&fit=crop&w=1600&h=400&q=80", use_container_width=True)
-    st.title("Premium Valuation: 2. Bausubstanz & Restnutzungsdauer")
-    st.divider()
-    
-    col_b1, col_b2 = st.columns(2, gap="large")
-    with col_b1: baujahr = st.number_input("Errichtungsjahr", min_value=1800, max_value=current_year, value=int(st.session_state.s_baujahr), key="bj_w", on_change=lambda: setattr(st.session_state, 's_baujahr', st.session_state.bj_w), help="Das ursprüngliche Baujahr des Gebäudes laut Bauakte.\n\nWo zu finden? Im Energieausweis, der Baubeschreibung oder der Brandversicherungsurkunde.")
-    with col_b2: gnd = st.number_input("Gesamtnutzungsdauer (GND)", min_value=40, max_value=100, value=int(st.session_state.s_gnd), key="gnd_w", on_change=lambda: setattr(st.session_state, 's_gnd', st.session_state.gnd_w), help="Die theoretische maximale Nutzungsdauer einer Immobilie bei normaler Instandhaltung laut ImmoWertV.\n\nWo zu finden? Für Wohngebäude gesetzlich starr auf 80 Jahre normiert.")
-    
-    alter = current_year - baujahr
-    basis_rnd = max(0, gnd - alter)
-    
-    st.markdown("#### Modernisierungs-Punkte (Werttreiber)")
-    col5, col6 = st.columns(2, gap="large")
-    with col5:
-        dach = st.slider("Dach & Fassade", 0, 4, value=int(st.session_state.s_mod_dach), key="d_w", on_change=lambda: setattr(st.session_state, 's_mod_dach', st.session_state.d_w), help="0 = Sanierungsstau, 4 = Vollständig gedämmt und neu eingedeckt in den letzten 5 Jahren.")
-        fenster = st.slider("Fenster & Türen", 0, 4, value=int(st.session_state.s_mod_fenster), key="fe_w", on_change=lambda: setattr(st.session_state, 's_mod_fenster', st.session_state.fe_w), help="0 = Alte Doppelverglasung, 4 = Moderne 3-fach Isolierverglasung nach GEG.")
-        huge_hz = st.slider("Wärmeerzeugung", 0, 4, value=int(st.session_state.s_mod_hz), key="hz_w", on_change=lambda: setattr(st.session_state, 's_mod_hz', st.session_state.hz_w), help="0 = Alte Gastherme, 4 = Moderne Wärmepumpe oder Fernwärmeanschluss.")
-    with col6:
-        sanitaer = st.slider("Sanitärbereiche", 0, 4, value=int(st.session_state.s_mod_sanitaer), key="sa_w", on_change=lambda: setattr(st.session_state, 's_mod_sanitaer', st.session_state.sa_w), help="0 = Stand 70er Jahre, 4 = Luxussanierung inklusive aller Rohre und Steigleitungen.")
-        innen = st.slider("Innenausbau", 0, 4, value=int(st.session_state.s_mod_innen), key="in_w", on_change=lambda: setattr(st.session_state, 's_mod_innen', st.session_state.in_w), help="0 = Abgewohnt, 4 = Neue Böden, glatte Wände und komplett erneuerte Elektrik (FI-Schalter).")
-        
-    gesamtpunkte = dach + fenster + huge_hz + sanitaer + innen
-    grad, zusatz_jahre = berechne_modernisierungsgrad(gesamtpunkte)
-    neue_rnd = min(gnd, basis_rnd + zusatz_jahre)
-    st.info(f"Substanz-Rating: **{grad}** (Wirtschaftlicher Lebenszyklus verlängert sich um {zusatz_jahre} Jahre)")
-    
-    if st.button("Restnutzungsdauer kalibrieren", type="primary"):
-        st.session_state.rnd_kalibriert = neue_rnd
-        st.rerun()
-        
-    st.markdown("<div class='benchmark-card'><div class='benchmark-title'>🛠️ Restnutzungsdauer (RND) Audit</div>"
-                f"<div class='benchmark-text'><b>Was bedeutet diese Zahl für Sie?</b><br>"
-                f"Die RND drückt aus, wie lange das Gebäude ohne tiefgreifende Kernsanierung noch wirtschaftlich Erträge erwirtschaften kann. Jede gezielte Modernisierung verlängert diesen Zeitraum und hebt den Ertragswertfaktor.<br><br>"
-                f"<b>Markt-Benchmark:</b> Banken fordern für langfristige Finanzierungen standardmäßig eine RND von mindestens 25 bis 30 Jahren. Fällt der Wert darunter, drohen erhebliche Risikoaufschläge beim Kreditzins.</div></div>", unsafe_allow_html=True)
-
-elif "3. Ertragswert (ImmoWertV)" in menue:
-    st.image("https://images.unsplash.com/photo-1554469384-e58fac16e23a?ixlib=rb-4.0.3&auto=format&fit=crop&w=1600&h=400&q=80", use_container_width=True)
-    st.title("Premium Valuation: 3. Ertragswert nach ImmoWertV")
-    st.divider()
-    
-    col_a, col_b = st.columns(2, gap="large")
-    with col_a:
-        miete = st.number_input("Jahresnettokaltmiete (Ist-Miete €)", min_value=0, value=int(st.session_state.s_ew_miete), key="ew_m_w", on_change=lambda: setattr(st.session_state, 's_ew_miete', st.session_state.ew_m_w), help="Die annualisierte Kaltmiete des Objekts.\n\nWo zu finden? In der letzten Mietaufstellung der Hausverwaltung oder direkt im Mietvertrag.")
-        bew_kosten = st.slider("Bewirtschaftungskosten (%)", 0.0, 40.0, value=float(st.session_state.s_ew_bew), key="ew_b_w", on_change=lambda: setattr(st.session_state, 's_ew_bew', st.session_state.ew_b_w), help="Prozentualer Abschlag für Verwaltung, nicht umlegbare Betriebskosten und Mietausfallwagnis.\n\nWo zu finden? Real aus der Hausgeldabrechnung entnehmen (Standard im Markt sind ca. 15-20%).")
-        zins = st.number_input("Liegenschaftszins p.a. (%)", min_value=0.1, max_value=15.0, value=float(st.session_state.s_ew_zins), step=0.1, key="ew_z_w", on_change=lambda: setattr(st.session_state, 's_ew_zins', st.session_state.ew_z_w), help="Der Zinssatz, mit dem der Verkehrswert von Immobilien marktüblich verzinst wird.\n\nWo zu finden? Wird im jährlichen Marktbericht des örtlichen Gutachterausschusses publiziert.")
-    with col_b:
-        flaeche = st.number_input("Grundstücksfläche (m²)", min_value=0, value=int(st.session_state.s_ew_flaeche), step=50, key="ew_f_w", on_change=lambda: setattr(st.session_state, 's_ew_flaeche', st.session_state.ew_f_w), help="Die exakte Grundstücksgröße des Areals.\n\nWo zu finden? Im amtlichen Grundbuchauszug im Bestandsverzeichnis.")
-        brw = st.number_input("Bodenrichtwert (€/m²)", min_value=0, value=int(st.session_state.bodenrichtwert_api), step=10)
-        
-    if st.button("Ertragswert generieren", type="primary"):
-        st.session_state.bodenrichtwert_api = brw
-        aktueller_rbf = berechne_rbf(zins, st.session_state.rnd_kalibriert)
-        gesamtwert, bodenwert, gebaeude_reinertrag = berechne_ertragswert(miete, bew_kosten, flaeche, brw, zins, aktueller_rbf)
-        st.session_state.ertragswert_ergebnis = {"gesamt": gesamtwert, "boden": bodenwert, "rbf": aktueller_rbf, "reinertrag": gebaeude_reinertrag}
-        
-    if st.session_state.ertragswert_ergebnis:
-        res = st.session_state.ertragswert_ergebnis
-        if res['reinertrag'] < 0: 
-            st.warning(f"⚠️ **Achtung (Bodenwert frisst Ertrag):** Der kalkulierte Gebäudereinertrag ist negativ ({res['reinertrag']:,.2f} €). Der Bodenwertanteil wurde genullt.".replace(",", "."))
-        st.markdown("### Bewertungs-Ergebnis")
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Kapitalisierungsfaktor", res['rbf'])
-        c2.metric("Bodenwertanteil", f"{res['boden']:,.0f} €".replace(",", "."))
-        c3.metric("Vorläufiger Ertragswert", f"{res['gesamt']:,.0f} €".replace(",", "."))
-        
-        st.markdown("<div class='benchmark-card'><div class='benchmark-title'>⚖️ Ertragswert & Liegenschaftszins Audit</div>"
-                    f"<div class='benchmark-text'><b>Was bedeutet diese Zahl für Sie?</b><br>"
-                    f"Der berechnete Ertragswert spiegelt den reinen, finanzmathematischen Wert der Immobilie basierend auf ihren Erträgen wider.<br><br>"
-                    f"<b>Markt-Benchmark:</b> Je niedriger der Liegenschaftszins ist (z.B. 2.5% in Top-Metropolen), desto teurer und begehrter ist der Standort. Liegt der aufgerufene Kaufpreis des Maklers deutlich über dem hier ermittelten Ertragswert, zahlen Sie einen spekulativen Aufpreis.</div></div>", unsafe_allow_html=True)
-
-elif "4. Sachwert (ImmoWertV)" in menue:
-    st.image("https://images.unsplash.com/photo-1504307651254-35680f356dfd?ixlib=rb-4.0.3&auto=format&fit=crop&w=1600&h=400&q=80", use_container_width=True)
-    st.title("Premium Valuation: 4. Sachwert nach ImmoWertV")
-    st.divider()
-        
-    col_s1, col_s2 = st.columns(2, gap="large")
-    with col_s1:
-        bgf = st.number_input("Bruttogrundfläche (BGF m²)", min_value=0, value=int(st.session_state.s_sw_bgf), step=10, key="sw_bgf_w", on_change=lambda: setattr(st.session_state, 's_sw_bgf', st.session_state.sw_bgf_w), help="Die Summe der Außenmaße aller Grundrissebenen des Gebäudes.\n\nWo zu finden? In den Architektenplänen oder der offiziellen Kubaturberechnung des Bauantrags.")
-        gnd_eingabe = st.number_input("Gesamtnutzungsdauer (GND)", min_value=40, max_value=100, value=int(st.session_state.s_sw_gnd), step=10, key="sw_gnd_w", on_change=lambda: setattr(st.session_state, 's_sw_gnd', st.session_state.sw_gnd_w))
-        nhk = st.number_input("Normalherstellungskosten (€/m²)", min_value=500, value=int(st.session_state.s_sw_nhk), step=50, key="sw_nhk_w", on_change=lambda: setattr(st.session_state, 's_sw_nhk', st.session_state.sw_nhk_w), help="Die standardisierten Neubaukosten pro m² BGF bezogen auf das Basisjahr 2010 (NHK 2010).\n\nWo zu finden? Festgelegt in den Tabellen der Sachwertrichtlinie des Bundes.")
-    with col_s2:
-        bpi = st.number_input("Baupreisindex (Destatis)", min_value=50.0, value=float(st.session_state.s_sw_bpi), step=1.0, key="sw_bpi_w", on_change=lambda: setattr(st.session_state, 's_sw_bpi', st.session_state.sw_bpi_w), help="Der aktuelle Faktor zur Anpassung der NHK 2010 an das heutige Preisniveau.\n\nWo zu finden? Wird vierteljährlich vom Statistischen Bundesamt (Destatis) publiziert.")
-        regio = st.number_input("Regionaler Marktanpassungsfaktor", min_value=0.5, value=float(st.session_state.s_sw_regio), step=0.01, key="sw_reg_w", on_change=lambda: setattr(st.session_state, 's_sw_regio', st.session_state.sw_reg_w), help="Gleicht das bundesweite Preisniveau an den lokalen Baumarkt an.\n\nWo zu finden? Wird im Bericht des lokalen Gutachterausschusses ausgewiesen.")
-        boden = st.number_input("Bodenwert (€)", min_value=0, value=int(st.session_state.s_sw_boden), step=1000, key="sw_bod_w", on_change=lambda: setattr(st.session_state, 's_sw_boden', st.session_state.sw_bod_w))
-    
-    st.divider()
-    swf = st.number_input("Sachwertfaktor (Marktanpassung)", min_value=0.1, max_value=2.0, value=float(st.session_state.s_sw_swf), step=0.05, key="sw_swf_w", on_change=lambda: setattr(st.session_state, 's_sw_swf', st.session_state.sw_swf_w), help="Der finale Multiplikator, um den reinen Substanzwert an den realen Markt anzupassen.\n\nWo zu finden? Aus den Marktberichten des Gutachterausschusses der jeweiligen Region.")
-        
-    if st.button("Substanzwert berechnen", type="primary"):
-        awm_prozent = berechne_awm(st.session_state.rnd_kalibriert, gnd_eingabe)
-        herstellungskosten_sw = bgf * nhk * regio * (bpi / 100)
-        gebaeude_sw_calc = herstellungskosten_sw - (herstellungskosten_sw * (awm_prozent / 100))
-        vorlaeufiger_sachwert_calc = gebaeude_sw_calc + boden
-        marktsachwert_calc = vorlaeufiger_sachwert_calc * swf
-        st.session_state.sachwert_ergebnis = {"gesamt": marktsachwert_calc, "gebaeude": gebaeude_sw_calc, "hk": herstellungskosten_sw, "awm": awm_prozent, "vor_sw": vorlaeufiger_sachwert_calc}
-        
-    if st.session_state.sachwert_ergebnis:
-        res = st.session_state.sachwert_ergebnis
-        st.markdown("### Bewertungs-Ergebnis")
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Vorläufiger Sachwert", f"{res['vor_sw']:,.0f} €".replace(",", "."))
-        c2.metric(f"Alterswertminderung", f"{res['awm']} %")
-        c3.metric("Markt-Sachwert (Marktangepasst)", f"{res['gesamt']:,.0f} €".replace(",", "."))
-        
-        st.markdown("<div class='benchmark-card'><div class='benchmark-title'>🧱 Sachwert & Substanz Audit</div>"
-                    f"<div class='benchmark-text'><b>Was bedeutet diese Zahl für Sie?</b><br>"
-                    f"Der Sachwert beziffert den reinen Substanz- und Materialwert (Boden + Herstellungskosten minus Alterung).<br><br>"
-                    f"<b>Markt-Benchmark:</b> Während bei selbstgenutzten Objekten der Sachwert dominiert, ist er bei Renditeobjekten zweitrangig. Weicht der Sachwert stark nach unten vom Kaufpreis ab, zahlen Sie einen extrem spekulativen Lage- oder Knappheitsaufschlag.</div></div>", unsafe_allow_html=True)
-
-elif "5. Cashflow & Leverage Engine" in menue:
-    st.image("https://images.unsplash.com/photo-1460925895917-afdab827c52f?ixlib=rb-4.0.3&auto=format&fit=crop&w=1600&h=400&q=80", use_container_width=True)
-    st.title("Premium Valuation: 5. Cashflow & Leverage Engine")
-    st.divider()
-    
-    col_r1, col_r2, col_r3 = st.columns(3, gap="medium")
-    with col_r1:
-        st.markdown("#### Deal-Struktur")
-        kaufpreis = st.number_input("Angebotspreis (€)", min_value=0, value=int(st.session_state.s_le_kaufpreis), step=10000, key="le_kp_w", on_change=lambda: setattr(st.session_state, 's_le_kaufpreis', st.session_state.le_kp_w))
-        knk = st.slider("Transaktionskosten (KNK %)", 0.0, 15.0, value=float(st.session_state.s_le_knk), step=0.1, key="le_knk_w", on_change=lambda: setattr(st.session_state, 's_le_knk', st.session_state.le_knk_w))
-        miete = st.number_input("Kaltmiete p.a. (€)", min_value=0, value=int(st.session_state.s_le_miete), step=1000, key="le_m_w", on_change=lambda: setattr(st.session_state, 's_le_miete', st.session_state.le_m_w))
-        bew_kosten = st.slider("OpEx / Bewirtschaftung (%)", 0.0, 30.0, value=float(st.session_state.s_le_bew), step=1.0, key="le_b_w", on_change=lambda: setattr(st.session_state, 's_le_bew', st.session_state.le_b_w))
-    with col_r2:
-        st.markdown("#### Debt / Fremdkapital")
-        ek = st.slider("Eigenkapital-Quote (%)", 10.0, 100.0, value=float(st.session_state.s_le_ek), step=1.0, key="le_ek_w", on_change=lambda: setattr(st.session_state, 's_le_ek', st.session_state.le_ek_w), help="Der prozentuale Anteil der Gesamtkosten, den du aus eigenen liquiden Mitteln einbringst.")
-        zins = st.number_input("Fremdkapitalzins p.a. (%)", min_value=0.1, max_value=10.0, value=float(st.session_state.s_le_zins), step=0.1, key="le_z_w", on_change=lambda: setattr(st.session_state, 's_le_zins', st.session_state.le_z_w), help="Der Sollzinssatz der Bank für das Immobiliendarlehen.\n\nWird hier automatisch an das gewählte Asset-Szenario gekoppelt.")
-        tilgung = st.number_input("Tilgungssatz p.a. (%)", min_value=0.0, max_value=10.0, value=float(st.session_state.s_le_tilgung), step=0.1, key="le_t_w", on_change=lambda: setattr(st.session_state, 's_le_tilgung', st.session_state.le_t_w), help="Die anfängliche jährliche Rückzahlung des Darlehens (Standard: 1.5% - 2%).")
-    with col_r3:
-        if immo_zustand == "Denkmalschutz / Sanierung":
-            st.warning("⚡ **Denkmal-Modus aktiv:** Das System hat das Profi-Steuerpanel unten automatisch für die Sanierungs-AfA nach § 7i EStG freigeschaltet!")
-        else:
-            st.info(f"💡 **Asset-Szenario:** Berechnungen basieren auf den gesetzlichen Abschreibungssätzen für {immo_zustand}.")
-
-    with st.expander("⚙️ Tax & Compliance Engine (AfA / Steuern)", expanded=True):
-        col_p1, col_p2, col_p3 = st.columns(3)
-        with col_p1: steuersatz = st.slider("Persönlicher Grenzsteuersatz (%)", 0, 45, value=int(st.session_state.s_le_steuersatz), key="le_st_w", on_change=lambda: setattr(st.session_state, 's_le_steuersatz', st.session_state.le_st_w), help="Dein individueller Steuersatz auf den jeweils nächsten Euro Einkommen. Wichtig für die Wirkung des Steuerschilds.")
-        with col_p2: gebaeudeanteil = st.slider("Gebäudeanteil (%)", 0, 100, value=int(st.session_state.s_le_gebaeudeanteil), key="le_ga_w", on_change=lambda: setattr(st.session_state, 's_le_gebaeudeanteil', st.session_state.le_ga_w), help="Der prozentuale Wertanteil des reinen Gebäudes an den Gesamtkosten, da Grund und Boden nicht abgeschrieben werden können.")
-        with col_p3: 
-            is_denkmal = (immo_zustand == "Denkmalschutz / Sanierung")
-            if is_denkmal:
-                denkmal_sanierungsanteil = st.slider("Sanierungsanteil (%)", 10, 90, value=int(st.session_state.s_le_denkmal_san), key="le_ds_w", on_change=lambda: setattr(st.session_state, 's_le_denkmal_san', st.session_state.le_ds_w))
-                afa_denkmal_satz = st.number_input("Denkmal-AfA (%)", min_value=0.0, max_value=15.0, value=float(st.session_state.s_le_denkmal_afa), step=0.5, key="le_da_w", on_change=lambda: setattr(st.session_state, 's_le_denkmal_afa', st.session_state.le_da_w))
-                afa_regulaer_satz = 2.0
-            else:
-                denkmal_sanierungsanteil = 0; afa_denkmal_satz = 0
-                afa_regulaer_satz = st.number_input("Reguläre Gebäude-AfA (%)", min_value=0.0, max_value=15.0, value=float(st.session_state.s_le_reg_afa), step=0.5, key="le_ra_w", on_change=lambda: setattr(st.session_state, 's_le_reg_afa', st.session_state.le_ra_w))
-
-    if st.button("Cashflow-Modell generieren", type="primary"):
-        if kaufpreis <= 0 or miete <= 0:
-            st.error("❌ **Berechnung unmöglich:** Bitte prüfen Sie Angebotspreis und Jahresmiete.")
-        else:
-            res = berechne_rendite_pro(kaufpreis, knk, miete, bew_kosten, ek, zins, tilgung, steuersatz, afa_regulaer_satz, gebaeudeanteil, is_denkmal, denkmal_sanierungsanteil, afa_denkmal_satz)
-            st.session_state.rendite_ergebnis = res
-        
-    if st.session_state.rendite_ergebnis:
-        res = st.session_state.rendite_ergebnis
-        st.write("### 1. Performance-Metriken")
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Return on Equity (ROE)", f"{res['ek_rendite']} %")
-        dscr = res['dscr']
-        if isinstance(dscr, float):
-            dscr_color = "🟢 Bankfähig" if dscr >= 1.2 else ("🟡 Restriktiv" if dscr >= 1.0 else "🔴 Hochrisiko")
-            c2.metric(f"Debt Service (DSCR)", f"{dscr} ({dscr_color})")
-        else: st.metric("DSCR", dscr)
-        c3.metric("Netto-Mietrendite", f"{res['netto']} %")
-        c4.metric("Kaufpreisfaktor", f"{res['faktor']} fach")
-
-        st.divider()
-        st.write("### 2. Liquiditäts-Prognose")
-        c5, c6, c7 = st.columns(3)
-        c5.metric("Free Cashflow (Pre-Tax)", f"{res['cashflow_monat']:,.2f} €".replace(",", "."))
-        steuer = res['steuerlast_jahr'] / 12
-        steuer_text = "Steuerlast p.M." if steuer > 0 else "Steuererstattung (Tax Shield) p.M."
-        c6.metric(steuer_text, f"{abs(steuer):,.2f} €".replace(",", "."))
-        cf_nach = res['cashflow_nach_steuer']
-        cf_color_nach = "🟢 Positiv" if cf_nach >= 0 else "🔴 Negativ"
-        c7.metric(f"True Cashflow (Post-Tax)", f"{cf_nach:,.2f} € ({cf_color_nach})".replace(",", "."))
-        
-        st.markdown("<div class='benchmark-card'><div class='benchmark-title'>🏦 Finanzierung, Steuern & DSCR Audit</div>"
-                    f"<div class='benchmark-text'><b>Was bedeuten diese Zahlen für Sie?</b><br>"
-                    f"• <b>True Cashflow (Post-Tax):</b> Zeigt an, was monatlich nach Zins, Tilgung und Steuer auf dem Konto landet.<br>"
-                    f"• <b>DSCR:</b> Verhältnis der Mieteinnahmen zur Bankrate. Ein DSCR von 1.20 bedeutet, dass die Miete 20% höher ist als die Kreditrate.<br><br>"
-                    f"<b>Markt-Benchmark:</b> Banken fordern für eine problemlose Vergabe strikt einen DSCR von mindestens <b>1.10 bis 1.15</b>. Liegt Ihr Wert unter 1.0, zahlt der Investor monatlich drauf.</div></div>", unsafe_allow_html=True)
-
-elif "6. Executive Pitch Deck" in menue:
-    st.image("https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?ixlib=rb-4.0.3&auto=format&fit=crop&w=1600&h=400&q=80", use_container_width=True)
-    st.title("Premium Valuation: 6. Executive Pitch Deck")
-    st.divider()
-    
-    if not (st.session_state.ertragswert_ergebnis and st.session_state.sachwert_ergebnis and st.session_state.rendite_ergebnis):
-        st.warning("⚠️ Der Report ist unvollständig. Bitte durchlaufen Sie die Pipeline (Schritte 3-5).")
-    else:
-        ew = st.session_state.ertragswert_ergebnis; sw = st.session_state.sachwert_ergebnis; re = st.session_state.rendite_ergebnis
-        st.markdown("### Valuation-Profil (ImmoWertV)")
-        col_rep1, col_rep2 = st.columns(2, gap="large")
-        with col_rep1: st.metric("Kalkulierter Ertragswert", f"{ew['gesamt']:,.0f} €".replace(",", "."))
-        with col_rep2: st.metric("Kalkulierter Sachwert", f"{sw['gesamt']:,.0f} €".replace(",", "."))
-            
-        st.divider()
-        st.markdown("### Investment-Profil")
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Einstiegsfaktor", f"{re['faktor']} fach")
-        c2.metric("Nettorendite", f"{re['netto']} %")
-        c3.metric("Leveraged ROE", f"{re['ek_rendite']} %")
-        c4.metric("Bank-Rating (DSCR)", f"{re['dscr']}")
-        
-        st.divider()
-        st.markdown("### Liquiditäts-Profil")
-        c5, c6 = st.columns(2)
-        c5.metric("Operativer Cashflow (Pre-Tax)", f"{re['cashflow_monat']:,.2f} €".replace(",", "."))
-        c6.metric("Echter Portfolio-Cashflow (Post-Tax)", f"{re['cashflow_nach_steuer']:,.2f} €".replace(",", "."))
-        
-        st.markdown(f"""
-        <div class='legal-box'>
-            <div class='legal-text'>
-                <b>⚖️ RECHTLICHER DISCLAIMER & HAFTUNGSAUSSCHLUSS:</b><br>
-                Die von <i>YieldBase</i> generierten Ergebnisse stellen eine unverbindliche mathematische Modellsimulation dar und dienen ausschließlich der Orientierung. Sie ersetzen ausdrücklich keine rechtliche, steuerliche oder finanzielle Beratung.<br><br>
-                <b>📊 QUELLENANGABEN & PROPRIETÄRER SCHUTZHINWEIS:</b><br>
-                Berechnungsmethodik konform mit der Immobilienwertermittlungsverordnung (ImmoWertV). Indexierte Baukosten basieren auf Werten des Statistischen Bundesamtes (Destatis).<br><br>
-                <b>© {current_year} YieldBase. Alle Rechte vorbehalten.</b>
+      )}
+      {ampelColor && (
+        <div style={{
+          position: "absolute", top: 10, right: 10,
+          fontSize: 10, fontFamily: T.sans, fontWeight: 600,
+          color: ampelColor.color, background: ampelColor.bg,
+          borderRadius: 4, padding: "2px 6px",
+        }}>
+          {ampelColor.label}
+        </div>
+      )}
+    </div>
+  );
+}
+ 
+// Benchmark-Box
+function BenchmarkBox({ text }) {
+  return (
+    <div style={{
+      background: T.goldFaint,
+      border: `1px solid rgba(201,168,76,0.25)`,
+      borderRadius: 8, padding: "10px 14px", marginTop: 10,
+    }}>
+      <span style={{ fontFamily: T.sans, fontSize: 12, color: T.textMuted, lineHeight: 1.5 }}>💡 {text}</span>
+    </div>
+  );
+}
+ 
+// Chart-Tooltip
+function ChartTooltip({ active, payload, label, formatFn }) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div style={{ background: T.surface3, border: `1px solid ${T.border}`, borderRadius: 8, padding: "10px 14px", fontFamily: T.sans, fontSize: 12 }}>
+      <div style={{ color: T.textMuted, marginBottom: 6, fontWeight: 600 }}>{label}</div>
+      {payload.map((p, i) => (
+        <div key={i} style={{ color: p.color, marginBottom: 2 }}>
+          {p.name}: <strong>{formatFn ? formatFn(p.value) : p.value}</strong>
+        </div>
+      ))}
+    </div>
+  );
+}
+ 
+// Toggle-Switch
+function Toggle({ label, checked, onChange }) {
+  return (
+    <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", marginBottom: 12 }}>
+      <div style={{
+        width: 38, height: 20, borderRadius: 10, background: checked ? T.gold : T.border,
+        position: "relative", transition: "background 0.2s", flexShrink: 0,
+      }}>
+        <div style={{
+          width: 16, height: 16, borderRadius: "50%", background: T.text,
+          position: "absolute", top: 2, left: checked ? 20 : 2, transition: "left 0.2s",
+        }} />
+      </div>
+      <span style={{ fontFamily: T.sans, fontSize: 13, color: T.textMuted }}>{label}</span>
+    </label>
+  );
+}
+ 
+// ─────────────────────────────────────────────────────────────────────────────
+// 6. HAUPT-APP
+// ─────────────────────────────────────────────────────────────────────────────
+ 
+export default function YieldBase() {
+  // State
+  const [inp, setInp] = useState(DEFAULT);
+  const [tab, setTab] = useState("eingabe");    // eingabe | dashboard | analyse | bericht
+  const [mode, setMode] = useState("expert");  // einsteiger | expert
+ 
+  // Updater
+  const set = useCallback((key, val) => setInp(prev => ({ ...prev, [key]: val })), []);
+ 
+  // Berechnungen (memoized)
+  const res = useMemo(() => calcAll(inp), [inp]);
+  const scOpt = useMemo(() => calcScenario(inp, "optimistic"), [inp]);
+  const scReal = useMemo(() => res, [res]);
+  const scPess = useMemo(() => calcScenario(inp, "pessimistic"), [inp]);
+ 
+  const isExpert = mode === "expert";
+ 
+  // Styling helpers
+  const tabStyle = (t) => ({
+    padding: "10px 20px",
+    background: tab === t ? T.surface3 : "transparent",
+    border: tab === t ? `1px solid ${T.border}` : "1px solid transparent",
+    borderRadius: 8,
+    color: tab === t ? T.text : T.textMuted,
+    cursor: "pointer",
+    fontFamily: T.sans,
+    fontSize: 13,
+    fontWeight: tab === t ? 600 : 400,
+    transition: "all 0.15s",
+  });
+ 
+  return (
+    <div style={{ background: T.bg, minHeight: "100vh", color: T.text, fontFamily: T.sans }}>
+ 
+      {/* Google Fonts */}
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Space+Mono:wght@400;700&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&display=swap');
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:14px; height:14px; border-radius:50%; background:${T.gold}; cursor:pointer; margin-top:-5px; }
+        input[type=range]::-webkit-slider-runnable-track { height:3px; border-radius:4px; }
+        input[type=number] { -moz-appearance: textfield; }
+        input[type=number]::-webkit-inner-spin-button { display: none; }
+        * { box-sizing: border-box; }
+        ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-track { background: ${T.surface}; } ::-webkit-scrollbar-thumb { background: ${T.border}; border-radius: 4px; }
+      `}</style>
+ 
+      {/* ── HEADER ──────────────────────────────────────────────────────────── */}
+      <header style={{
+        background: T.surface,
+        borderBottom: `1px solid ${T.border}`,
+        padding: "0 32px",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        height: 64,
+        position: "sticky", top: 0, zIndex: 100,
+      }}>
+        {/* Logo */}
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          <svg width="32" height="32" viewBox="0 0 100 100">
+            <defs>
+              <linearGradient id="g" x1="0%" y1="100%" x2="100%" y2="0%">
+                <stop offset="0%" stopColor="#4f46e5" />
+                <stop offset="100%" stopColor="#06b6d4" />
+              </linearGradient>
+            </defs>
+            <path d="M50 15 L80 32 L50 50 L20 32Z" fill="url(#g)" />
+            <path d="M20 32 L50 50 L50 85 L35 77 L35 58 L20 50Z" fill="#0f172a" />
+            <path d="M80 32 L50 50 L50 85 L65 77 L65 58 L80 50Z" fill="url(#g)" opacity="0.8" />
+          </svg>
+          <div>
+            <div style={{ fontFamily: T.serif, fontSize: 20, color: T.text, lineHeight: 1 }}>YieldBase</div>
+            <div style={{ fontFamily: T.sans, fontSize: 11, color: T.textDim, letterSpacing: "0.08em", marginTop: 1 }}>INVESTMENT ANALYTICS v2</div>
+          </div>
+        </div>
+ 
+        {/* Tabs */}
+        <nav style={{ display: "flex", gap: 6 }}>
+          {[["eingabe","⌨ Eingabe"],["dashboard","▦ KPI Dashboard"],["analyse","⛶ Analyse"],["bericht","▤ Bericht"]].map(([t, lbl]) => (
+            <button key={t} style={tabStyle(t)} onClick={() => setTab(t)}>{lbl}</button>
+          ))}
+        </nav>
+ 
+        {/* Mode Toggle */}
+        <div style={{ display: "flex", gap: 4, background: T.surface2, border: `1px solid ${T.border}`, borderRadius: 8, padding: 4 }}>
+          {[["einsteiger","Einsteiger"],["expert","Experte"]].map(([m, lbl]) => (
+            <button key={m} onClick={() => setMode(m)} style={{
+              padding: "5px 14px", borderRadius: 6,
+              background: mode === m ? T.gold : "transparent",
+              color: mode === m ? T.bg : T.textMuted,
+              border: "none", cursor: "pointer", fontFamily: T.sans, fontSize: 12, fontWeight: 600,
+              transition: "all 0.15s",
+            }}>{lbl}</button>
+          ))}
+        </div>
+      </header>
+ 
+      {/* ── MAIN ─────────────────────────────────────────────────────────────── */}
+      <main style={{ maxWidth: 1400, margin: "0 auto", padding: "28px 24px" }}>
+ 
+        {/* Quick-Status-Bar (immer sichtbar) */}
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))",
+          gap: 10, marginBottom: 24,
+          background: T.surface,
+          border: `1px solid ${T.border}`,
+          borderRadius: 10, padding: "14px 20px",
+        }}>
+          {[
+            ["Gesamtinvestition", fmtEUR(res.gesamt)],
+            ["Brutto-Rendite",    fmtPct(res.brutto)],
+            ["Netto-Rendite",     fmtPct(res.nettoRend)],
+            ["Cashflow/Mon.",     fmtEUR(res.cfPreM)],
+            ["DSCR",              res.dscr.toString().replace(".", ",")],
+            ["EK-Rendite (ROE)",  fmtPct(res.roe)],
+          ].map(([lbl, val], i) => (
+            <div key={i} style={{ textAlign: "center" }}>
+              <div style={{ fontSize: 11, color: T.textDim, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>{lbl}</div>
+              <div style={{ fontFamily: T.mono, fontSize: 15, fontWeight: 700, color: T.gold }}>{val}</div>
             </div>
+          ))}
         </div>
-        """, unsafe_allow_html=True)
+ 
+        {/* ═══════════════════════════════════════════════════════ TAB: EINGABE */}
+        {tab === "eingabe" && (
+          <div style={{ display: "grid", gridTemplateColumns: "380px 1fr", gap: 20 }}>
+ 
+            {/* ── Linke Spalte: Inputs ── */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+ 
+              {/* Panel: Objekt */}
+              <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: "18px 20px" }}>
+                <h2 style={{ fontFamily: T.serif, fontSize: 17, color: T.text, margin: "0 0 16px", display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ color: T.gold }}>01</span> Objekt & Transaktion
+                </h2>
+                <NumInput label="Kaufpreis" value={inp.kaufpreis} step={5000} onChange={v => set("kaufpreis", v)}
+                  tooltip="Brutto-Verkaufspreis ohne Nebenkosten." />
+                <SliderRow label="Kaufnebenkosten (KNK)" value={inp.knk} min={5} max={15} step={0.5} unit=" %"
+                  onChange={v => set("knk", v)}
+                  tooltip="Grunderwerbsteuer (3,5–6,5 %) + Notar (≈2 %) + Makler (0–3,57 %)" />
+                <NumInput label="Jahres-Kaltmiete" value={inp.jahresmiete} step={500} onChange={v => set("jahresmiete", v)}
+                  tooltip="Aktuelle Ist-Miete p.a. (netto, kalt)." />
+                <SliderRow label="Bewirtschaftungskosten" value={inp.bew} min={5} max={35} step={1} unit=" %"
+                  onChange={v => set("bew", v)}
+                  tooltip="Verwaltung, nicht-umlagefähige Betriebskosten, Mietausfallwagnis. Standard: 15–22 %." />
+                <SliderRow label="Leerstandsrisiko" value={inp.leerstand} min={0} max={15} step={0.5} unit=" %"
+                  onChange={v => set("leerstand", v)}
+                  tooltip="Erwarteter jährlicher Leerstand als %-Anteil der Jahresmiete." />
+                <NumInput label="Baujahr" value={inp.baujahr} step={1} unit="J." onChange={v => set("baujahr", v)}
+                  tooltip="Bestimmt automatisch die Instandhaltungsrücklage (jung: 0,4 % / mittel: 0,8 % / alt: 1,6 % p.a.)." />
+                {!isExpert && (
+                  <BenchmarkBox text={`Kaufpreisfaktor: ${fmtX(res.faktor)} — ${res.faktor <= 22 ? "Günstiger Einstieg (< 22x)." : res.faktor <= 27 ? "Marktüblich (22–27x)." : "Teuer (> 27x) – Rendite schwer darstellbar."}`} />
+                )}
+              </div>
+ 
+              {/* Panel: Finanzierung */}
+              <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: "18px 20px" }}>
+                <h2 style={{ fontFamily: T.serif, fontSize: 17, color: T.text, margin: "0 0 16px", display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ color: T.gold }}>02</span> Finanzierung
+                </h2>
+                <SliderRow label="Eigenkapital-Quote" value={inp.ek} min={5} max={100} step={1} unit=" %"
+                  onChange={v => set("ek", v)}
+                  tooltip="Anteil der Gesamtinvestition aus Eigenmitteln." />
+                <SliderRow label="Sollzins p.a." value={inp.zins} min={0.5} max={8} step={0.1} unit=" %"
+                  onChange={v => set("zins", v)} />
+                <SliderRow label="Anfangstilgung p.a." value={inp.tilgung} min={0.5} max={6} step={0.1} unit=" %"
+                  onChange={v => set("tilgung", v)}
+                  tooltip="Standard: 1,5–2 %. Höhere Tilgung = weniger Zinsrisiko, aber weniger Cashflow." />
+                {!isExpert && (
+                  <BenchmarkBox text={`DSCR ${res.dscr.toFixed(2).replace(".",",")} — ${res.dscr >= 1.3 ? "Bankfähig ✓" : res.dscr >= 1.1 ? "Akzeptabel (Grenzbereich)" : "Kritisch – Bank wird ablehnen"}`} />
+                )}
+              </div>
+ 
+              {/* Panel: Steuer & AfA (nur Experte) */}
+              {isExpert && (
+                <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: "18px 20px" }}>
+                  <h2 style={{ fontFamily: T.serif, fontSize: 17, color: T.text, margin: "0 0 16px", display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ color: T.gold }}>03</span> Steuer & AfA
+                  </h2>
+                  <SliderRow label="Persönlicher Steuersatz" value={inp.steuer} min={0} max={45} step={1} unit=" %"
+                    onChange={v => set("steuer", v)} />
+                  <SliderRow label="Gebäudeanteil" value={inp.gebaeude} min={40} max={100} step={1} unit=" %"
+                    onChange={v => set("gebaeude", v)}
+                    tooltip="Anteil am Gesamtkauf, der auf das Gebäude entfällt (Boden nicht abschreibbar)." />
+                  <Toggle label="Denkmalschutz-AfA aktiv (§ 7i EStG)" checked={inp.isDenkmal} onChange={v => set("isDenkmal", v)} />
+                  {inp.isDenkmal ? (
+                    <>
+                      <SliderRow label="Sanierungsanteil" value={inp.dkSan} min={10} max={90} step={1} unit=" %"
+                        onChange={v => set("dkSan", v)} />
+                      <SliderRow label="Denkmal-AfA-Satz" value={inp.dkAfa} min={3} max={12} step={0.5} unit=" %"
+                        onChange={v => set("dkAfa", v)} />
+                    </>
+                  ) : (
+                    <SliderRow label="Reguläre Gebäude-AfA" value={inp.regAfa} min={1} max={4} step={0.5} unit=" %"
+                      onChange={v => set("regAfa", v)}
+                      tooltip="Neubau ≥ 2023: 3 %. Altbau: 2 %. Denkmal: bis 9 % p.a. (§ 7i)." />
+                  )}
+                </div>
+              )}
+ 
+              {/* Panel: Szenario-Prämissen (nur Experte) */}
+              {isExpert && (
+                <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: "18px 20px" }}>
+                  <h2 style={{ fontFamily: T.serif, fontSize: 17, color: T.text, margin: "0 0 16px", display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ color: T.gold }}>04</span> Projekt-Prämissen (10 J.)
+                  </h2>
+                  <SliderRow label="Wertzuwachs p.a." value={inp.wertZuwachs} min={-2} max={6} step={0.5} unit=" %"
+                    onChange={v => set("wertZuwachs", v)} />
+                  <SliderRow label="Mietsteigerung p.a." value={inp.mietSteigerung} min={0} max={5} step={0.25} unit=" %"
+                    onChange={v => set("mietSteigerung", v)} />
+                  <SliderRow label="Diskontierungssatz" value={inp.diskont} min={1} max={12} step={0.5} unit=" %"
+                    onChange={v => set("diskont", v)}
+                    tooltip="Wird für NPV-Berechnung verwendet. Richtwert: risikoadjustierter Kapitalkostensatz (5–8 %)." />
+                </div>
+              )}
+            </div>
+ 
+            {/* ── Rechte Spalte: Live-Ergebnis ── */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+ 
+              {/* Kernergebnis-Banner */}
+              <div style={{
+                background: `linear-gradient(135deg, ${T.surface2} 0%, ${T.surface3} 100%)`,
+                border: `1px solid ${T.border}`,
+                borderRadius: 12, padding: "22px 24px",
+              }}>
+                <div style={{ fontFamily: T.serif, fontSize: 14, color: T.textMuted, marginBottom: 6 }}>
+                  Gesamtinvestition (inkl. {fmtPct(inp.knk)} KNK)
+                </div>
+                <div style={{ fontFamily: T.mono, fontSize: 34, fontWeight: 700, color: T.gold }}>
+                  {fmtEUR(res.gesamt)}
+                </div>
+                <div style={{ display: "flex", gap: 20, marginTop: 14 }}>
+                  {[
+                    ["Eigenkapital", fmtEUR(res.ekAbs)],
+                    ["Fremdkapital", fmtEUR(res.fk)],
+                    ["Kaufnebenkosten", fmtEUR(res.knkAbs)],
+                  ].map(([l, v]) => (
+                    <div key={l}>
+                      <div style={{ fontSize: 11, color: T.textDim, textTransform: "uppercase", letterSpacing: "0.05em" }}>{l}</div>
+                      <div style={{ fontFamily: T.mono, fontSize: 14, color: T.text, marginTop: 2 }}>{v}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+ 
+              {/* KPI-Grid Einsteiger */}
+              {!isExpert && (
+                <>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                    <KpiCard label="Bruttorendite" value={fmtPct(res.brutto)} subLabel="Kaufpreis-Basis" ampelKey="brutto" ampelVal={res.brutto} />
+                    <KpiCard label="Netto-Rendite" value={fmtPct(res.nettoRend)} subLabel="Gesamtinvestition" ampelKey="nettoRend" ampelVal={res.nettoRend} />
+                    <KpiCard label="Kaufpreisfaktor" value={fmtX(res.faktor)} subLabel="Jahre bis Amortisation (brutto)" ampelKey="faktor" ampelVal={res.faktor} />
+                    <KpiCard label="DSCR" value={res.dscr.toFixed(2).replace(".", ",")} subLabel="Schuldendeckungsgrad" ampelKey="dscr" ampelVal={res.dscr} />
+                    <KpiCard label="Cashflow/Monat" value={fmtEUR(res.cfPreM)} subLabel="Vor Steuer" ampelKey="cfPreM" ampelVal={res.cfPreM} />
+                    <KpiCard label="Break-Even-Miete" value={fmtEUR(res.beMonat)} subLabel="Mindestmiete/Monat" />
+                  </div>
+                  <BenchmarkBox text="Einsteiger-Benchmark: DSCR ≥ 1,15 für Bankfinanzierung. Netto-Rendite ≥ 4 % als Mindeststandard. Cashflow ≥ 0 € empfohlen." />
+                </>
+              )}
+ 
+              {/* KPI-Grid Experte */}
+              {isExpert && (
+                <>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+                    <KpiCard label="Bruttorendite" value={fmtPct(res.brutto)} ampelKey="brutto" ampelVal={res.brutto} />
+                    <KpiCard label="Netto-Rendite" value={fmtPct(res.nettoRend)} ampelKey="nettoRend" ampelVal={res.nettoRend} />
+                    <KpiCard label="Cap Rate (NOI)" value={fmtPct(res.capRate)} ampelKey="capRate" ampelVal={res.capRate} />
+                    <KpiCard label="Kaufpreisfaktor" value={fmtX(res.faktor)} ampelKey="faktor" ampelVal={res.faktor} />
+                    <KpiCard label="DSCR" value={res.dscr.toFixed(2).replace(".",",")} ampelKey="dscr" ampelVal={res.dscr} />
+                    <KpiCard label="LTV" value={fmtPct(res.ltv, 1)} ampelKey="ltv" ampelVal={res.ltv} />
+                    <KpiCard label="CF pre-Tax / Mon." value={fmtEUR(res.cfPreM)} ampelKey="cfPreM" ampelVal={res.cfPreM} />
+                    <KpiCard label="CF post-Tax / Mon." value={fmtEUR(res.cfPostM)} ampelKey="cfPostM" ampelVal={res.cfPostM} />
+                    <KpiCard label="EK-Rendite (ROE)" value={fmtPct(res.roe)} ampelKey="roe" ampelVal={res.roe} />
+                    <KpiCard label="IRR (10 J.)" value={fmtPct(res.irrVal)} ampelKey="irrVal" ampelVal={res.irrVal} />
+                    <KpiCard label="NPV" value={fmtEUR(res.npvVal)} ampelKey="npvVal" ampelVal={res.npvVal} />
+                    <KpiCard label="MOIC" value={fmtX(res.moic)} ampelKey="moic" ampelVal={res.moic} />
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+                    <KpiCard label="Break-Even-Miete" value={fmtEUR(res.beMonat)} subLabel="Mindestmiete / Monat" />
+                    <KpiCard label="Amortisation EK" value={res.amort ? fmtYr(res.amort) : "Negativ"} subLabel="aus Post-Tax-CF" />
+                    <KpiCard label="AfA p.a." value={fmtEUR(res.afa)} subLabel={inp.isDenkmal ? "Denkmal § 7i EStG" : "Regulär"} />
+                  </div>
+                </>
+              )}
+ 
+              {/* Kostenstruktur */}
+              <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: "18px 20px" }}>
+                <h3 style={{ fontFamily: T.serif, fontSize: 15, color: T.text, margin: "0 0 12px" }}>Kostenstruktur</h3>
+                <div style={{ display: "flex", gap: 20, alignItems: "center" }}>
+                  <div style={{ width: 110, height: 110, flexShrink: 0 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie data={res.pie} dataKey="value" innerRadius={30} outerRadius={52} paddingAngle={2} startAngle={90} endAngle={-270}>
+                          {res.pie.map((d, i) => <Cell key={i} fill={d.color} />)}
+                        </Pie>
+                        <Tooltip formatter={v => fmtEUR(v)} contentStyle={{ background: T.surface3, border: `1px solid ${T.border}`, borderRadius: 6, fontSize: 12 }} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    {res.pie.map((d, i) => (
+                      <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                        <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <span style={{ width: 8, height: 8, borderRadius: 2, background: d.color, flexShrink: 0 }} />
+                          <span style={{ fontSize: 12, color: T.textMuted }}>{d.name}</span>
+                        </span>
+                        <span style={{ fontFamily: T.mono, fontSize: 12, color: T.text }}>{fmtEUR(d.value)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+ 
+        {/* ═══════════════════════════════════════════ TAB: KPI DASHBOARD */}
+        {tab === "dashboard" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+ 
+            <SectionHead label="Rendite & Ertrag" />
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
+              <KpiCard label="Bruttorendite" value={fmtPct(res.brutto)} subLabel="Jahresmiete / Kaufpreis" ampelKey="brutto" ampelVal={res.brutto} />
+              <KpiCard label="Netto-Mietrendite" value={fmtPct(res.nettoRend)} subLabel="Nach Bewirtschaftung & Leerstand" ampelKey="nettoRend" ampelVal={res.nettoRend} />
+              <KpiCard label="Cap Rate (NOI Yield)" value={fmtPct(res.capRate)} subLabel="Vor Finanzierung & Steuer" ampelKey="capRate" ampelVal={res.capRate} />
+              <KpiCard label="Kaufpreisfaktor" value={fmtX(res.faktor)} subLabel="Brutto-Rückzahldauer" ampelKey="faktor" ampelVal={res.faktor} />
+              <KpiCard label="Jahresmieteinnahmen" value={fmtEUR(inp.jahresmiete)} subLabel="Brutto" />
+              <KpiCard label="Nettomietertrag p.a." value={fmtEUR(res.nettoMiete)} subLabel="Nach Bewirtschaftung+Leerstand" />
+            </div>
+ 
+            <SectionHead label="Cashflow & Liquidität" />
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
+              <KpiCard label="Cashflow / Monat (pre)" value={fmtEUR(res.cfPreM)} subLabel="Vor Steuer" ampelKey="cfPreM" ampelVal={res.cfPreM} />
+              <KpiCard label="Cashflow / Monat (post)" value={fmtEUR(res.cfPostM)} subLabel="Nach Steuern & Steuerschild" ampelKey="cfPostM" ampelVal={res.cfPostM} />
+              <KpiCard label="Cashflow / Jahr (pre)" value={fmtEUR(res.cfPreM * 12)} subLabel="Annualisiert" />
+              <KpiCard label="Break-Even-Miete/Monat" value={fmtEUR(res.beMonat)} subLabel="Mindestmiete zum Kostendecken" />
+              <KpiCard label="AfA (Steuerschild) p.a." value={fmtEUR(res.afa)} subLabel={inp.isDenkmal ? "§ 7i Denkmal-AfA" : `${inp.regAfa} % regulär`} />
+              <KpiCard label="Steuerlast p.a." value={fmtEUR(res.steuerlast)} subLabel={`Steuersatz ${inp.steuer} %`} />
+            </div>
+ 
+            {isExpert && (
+              <>
+                <SectionHead label="Finanzierung & Verschuldung" />
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
+                  <KpiCard label="DSCR" value={res.dscr.toFixed(2).replace(".",",")} subLabel="Schuldendeckungsgrad" ampelKey="dscr" ampelVal={res.dscr} />
+                  <KpiCard label="LTV" value={fmtPct(res.ltv, 1)} subLabel="Loan-to-Value (FK/Gesamt)" ampelKey="ltv" ampelVal={res.ltv} />
+                  <KpiCard label="Eigenkapital" value={fmtEUR(res.ekAbs)} subLabel={`${inp.ek} % der Gesamtinvestition`} />
+                  <KpiCard label="Darlehen (FK)" value={fmtEUR(res.fk)} subLabel={`${(100-inp.ek)} % Fremdfinanzierung`} />
+                  <KpiCard label="Zinslast p.a." value={fmtEUR(res.zinslast)} subLabel={`${inp.zins} % p.a. auf FK`} />
+                  <KpiCard label="Kapitaldienst p.a." value={fmtEUR(res.kd)} subLabel="Zins + Tilgung" />
+                </div>
+ 
+                <SectionHead label="Investment-Returns (10-Jahres-Horizont)" />
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
+                  <KpiCard label="ROE (EK-Rendite)" value={fmtPct(res.roe)} subLabel="Leveraged Return" ampelKey="roe" ampelVal={res.roe} />
+                  <KpiCard label="ROI" value={fmtPct(res.roi)} subLabel="Gesamtkapitalrendite" />
+                  <KpiCard label="IRR (10 Jahre)" value={fmtPct(res.irrVal)} subLabel="Interner Zinsfuß (inkl. Wertzuwachs)" ampelKey="irrVal" ampelVal={res.irrVal} />
+                  <KpiCard label="NPV" value={fmtEUR(res.npvVal)} subLabel={`Bei ${inp.diskont} % Diskont`} ampelKey="npvVal" ampelVal={res.npvVal} />
+                  <KpiCard label="MOIC" value={fmtX(res.moic)} subLabel="Multiple on Invested Capital" ampelKey="moic" ampelVal={res.moic} />
+                  <KpiCard label="EK-Amortisation" value={res.amort ? fmtYr(res.amort) : "n.v."} subLabel="Jahre bis EK-Rückfluss" />
+                </div>
+ 
+                <SectionHead label="Risiko & Substanz" />
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
+                  <KpiCard label="Instandhaltung p.a." value={fmtEUR(res.ihr)} subLabel={`Baujahr ${inp.baujahr} — auto`} />
+                  <KpiCard label="Leerstandsverlust p.a." value={fmtEUR(res.leerstandAbs)} subLabel={`${inp.leerstand} % Leerstand`} />
+                  <KpiCard label="NOI (Nettobetriebsertrag)" value={fmtEUR(res.noi)} subLabel="Nach IHR, vor Finanzierung" />
+                  <KpiCard label="KNK absolut" value={fmtEUR(res.knkAbs)} subLabel={`${inp.knk} % des Kaufpreises`} />
+                  <KpiCard label="Grunderwerbsteuer" value={fmtEUR(res.grunderwerbsteuer)} subLabel="3,5 % (variiert je Bundesland)" />
+                  <KpiCard label="Notar/Grundbuch" value={fmtEUR(res.notarGrundbuch)} subLabel="≈ 2 % des Kaufpreises" />
+                </div>
+              </>
+            )}
+          </div>
+        )}
+ 
+        {/* ═══════════════════════════════════════════ TAB: ANALYSE */}
+        {tab === "analyse" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+ 
+            {/* Cashflow-Verlauf */}
+            <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: "20px 24px" }}>
+              <h3 style={{ fontFamily: T.serif, fontSize: 17, color: T.text, margin: "0 0 4px" }}>Cashflow-Projektion (10 Jahre)</h3>
+              <p style={{ fontSize: 12, color: T.textDim, margin: "0 0 16px" }}>Monatlicher Cashflow vor und nach Steuer — realistisches Basisszenario</p>
+              <div style={{ display: "flex", gap: 16, marginBottom: 12 }}>
+                {[
+                  { color: T.cyan,  label: "CF pre-Tax / Monat" },
+                  { color: T.gold,  label: "CF post-Tax / Monat" },
+                ].map(({ color, label }) => (
+                  <span key={label} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: T.textMuted }}>
+                    <span style={{ width: 10, height: 10, borderRadius: 2, background: color }} /> {label}
+                  </span>
+                ))}
+              </div>
+              <ResponsiveContainer width="100%" height={240}>
+                <AreaChart data={res.proj} margin={{ top: 10, right: 10, bottom: 0, left: 0 }}>
+                  <defs>
+                    <linearGradient id="gradCyan" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor={T.cyan} stopOpacity={0.3} />
+                      <stop offset="95%" stopColor={T.cyan} stopOpacity={0} />
+                    </linearGradient>
+                    <linearGradient id="gradGold" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor={T.gold} stopOpacity={0.25} />
+                      <stop offset="95%" stopColor={T.gold} stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke={T.border} vertical={false} />
+                  <XAxis dataKey="y" tick={{ fill: T.textDim, fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fill: T.textDim, fontSize: 11 }} axisLine={false} tickLine={false}
+                    tickFormatter={v => v >= 0 ? `${v} €` : `${v} €`} />
+                  <Tooltip content={<ChartTooltip formatFn={v => `${v} €`} />} />
+                  <Area type="monotone" dataKey="cfPre" name="CF pre-Tax" stroke={T.cyan} fill="url(#gradCyan)" strokeWidth={2} dot={false} />
+                  <Area type="monotone" dataKey="cfPost" name="CF post-Tax" stroke={T.gold} fill="url(#gradGold)" strokeWidth={2} dot={false} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+ 
+            {/* Vermögensaufbau */}
+            <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: "20px 24px" }}>
+              <h3 style={{ fontFamily: T.serif, fontSize: 17, color: T.text, margin: "0 0 4px" }}>Vermögensaufbau (Equity Buildup)</h3>
+              <p style={{ fontSize: 12, color: T.textDim, margin: "0 0 16px" }}>Eigenkapital-Entwicklung = Immobilienwert − Restschuld</p>
+              <div style={{ display: "flex", gap: 16, marginBottom: 12 }}>
+                {[
+                  { color: T.green,  label: "Eigenkapital (Equity)" },
+                  { color: T.blue,   label: "Immobilienwert" },
+                  { color: T.red,    label: "Restschuld" },
+                ].map(({ color, label }) => (
+                  <span key={label} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: T.textMuted }}>
+                    <span style={{ width: 10, height: 10, borderRadius: 2, background: color }} /> {label}
+                  </span>
+                ))}
+              </div>
+              <ResponsiveContainer width="100%" height={240}>
+                <LineChart data={res.proj} margin={{ top: 10, right: 10, bottom: 0, left: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={T.border} vertical={false} />
+                  <XAxis dataKey="y" tick={{ fill: T.textDim, fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fill: T.textDim, fontSize: 11 }} axisLine={false} tickLine={false}
+                    tickFormatter={v => Math.abs(v) >= 1000 ? `${Math.round(v/1000)}k` : v} />
+                  <Tooltip content={<ChartTooltip formatFn={v => fmtEUR(v)} />} />
+                  <Line type="monotone" dataKey="equity" name="Eigenkapital" stroke={T.green} strokeWidth={2.5} dot={false} />
+                  <Line type="monotone" dataKey="iwert" name="Immobilienwert" stroke={T.blue} strokeWidth={2} dot={false} strokeDasharray="6 3" />
+                  <Line type="monotone" dataKey="schulden" name="Restschuld" stroke={T.red} strokeWidth={1.5} dot={false} strokeDasharray="3 3" />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+ 
+            {/* Szenario-Vergleich */}
+            <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: "20px 24px" }}>
+              <h3 style={{ fontFamily: T.serif, fontSize: 17, color: T.text, margin: "0 0 4px" }}>Szenario-Vergleich</h3>
+              <p style={{ fontSize: 12, color: T.textDim, margin: "0 0 20px" }}>
+                Optimistisch (+10 % Miete, −0,5 % Zins, +1,5 % Wert, −1 % Leerstand) vs. Pessimistisch (−10 % Miete, +0,8 % Zins, ...)
+              </p>
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: T.sans, fontSize: 13 }}>
+                  <thead>
+                    <tr>
+                      {[["KPI",""],["Optimistisch","#10b981"],["Realistisch","#c9a84c"],["Pessimistisch","#ef4444"]].map(([h, c]) => (
+                        <th key={h} style={{ textAlign: h === "KPI" ? "left" : "right", padding: "8px 14px", color: c || T.textMuted, fontSize: 12, fontWeight: 600, borderBottom: `1px solid ${T.border}`, letterSpacing: "0.04em" }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[
+                      ["Bruttorendite",     r => fmtPct(r.brutto),    "brutto"],
+                      ["Netto-Rendite",     r => fmtPct(r.nettoRend), "nettoRend"],
+                      ["DSCR",              r => r.dscr.toFixed(2).replace(".",","), "dscr"],
+                      ["Cashflow / Monat",  r => fmtEUR(r.cfPreM),    "cfPreM"],
+                      ["ROE",               r => fmtPct(r.roe),        "roe"],
+                      ["IRR (10 J.)",       r => fmtPct(r.irrVal),     "irrVal"],
+                      ["NPV",               r => fmtEUR(r.npvVal),     "npvVal"],
+                      ["MOIC",              r => fmtX(r.moic),          "moic"],
+                    ].map(([label, fmt, aKey], ri) => (
+                      <tr key={label} style={{ background: ri % 2 === 0 ? "transparent" : T.surface2 }}>
+                        <td style={{ padding: "10px 14px", color: T.textMuted }}>{label}</td>
+                        {[scOpt, scReal, scPess].map((sc, si) => {
+                          const val = fmt(sc);
+                          const numVal = sc[aKey];
+                          const ampel = aKey ? AMP[getAmpel(aKey, numVal)] : null;
+                          return (
+                            <td key={si} style={{ padding: "10px 14px", textAlign: "right", fontFamily: T.mono, color: ampel ? ampel.color : T.text }}>
+                              {val}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+ 
+        {/* ═══════════════════════════════════════════ TAB: BERICHT */}
+        {tab === "bericht" && (
+          <div style={{ maxWidth: 900, margin: "0 auto" }}>
+ 
+            {/* Executive Summary Box */}
+            <div style={{
+              background: `linear-gradient(135deg, ${T.surface2} 0%, ${T.surface3} 100%)`,
+              border: `1px solid ${T.borderHi}`,
+              borderRadius: 14, padding: "30px 36px", marginBottom: 20,
+            }}>
+              <div style={{ fontFamily: T.serif, fontSize: 28, color: T.text, marginBottom: 6 }}>Investment Summary</div>
+              <div style={{ fontFamily: T.sans, fontSize: 13, color: T.textDim, marginBottom: 24 }}>YieldBase Analytics · Stand: {new Date().toLocaleDateString("de-DE")}</div>
+ 
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 20, marginBottom: 24 }}>
+                {[
+                  { label: "Gesamtinvestition", value: fmtEUR(res.gesamt) },
+                  { label: "Jahresmiete (Brutto)", value: fmtEUR(inp.jahresmiete) },
+                  { label: "Eigenkapital", value: fmtEUR(res.ekAbs) },
+                ].map(({ label, value }) => (
+                  <div key={label} style={{ background: "rgba(0,0,0,0.2)", borderRadius: 8, padding: "14px 16px" }}>
+                    <div style={{ fontSize: 11, color: T.textDim, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>{label}</div>
+                    <div style={{ fontFamily: T.mono, fontSize: 20, fontWeight: 700, color: T.gold }}>{value}</div>
+                  </div>
+                ))}
+              </div>
+ 
+              <div style={{ height: 1, background: T.border, margin: "20px 0" }} />
+ 
+              {/* Gesamt-Rating */}
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ fontSize: 12, color: T.textDim, marginBottom: 10, textTransform: "uppercase", letterSpacing: "0.06em" }}>KPI-Gesamtbewertung</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  {[
+                    ["Rendite", res.nettoRend, "nettoRend"],
+                    ["Cashflow", res.cfPreM, "cfPreM"],
+                    ["DSCR", res.dscr, "dscr"],
+                    ["LTV", res.ltv, "ltv"],
+                    ["ROE", res.roe, "roe"],
+                    ["IRR", res.irrVal, "irrVal"],
+                    ["NPV", res.npvVal, "npvVal"],
+                  ].map(([lbl, val, key]) => {
+                    const a = AMP[getAmpel(key, val)];
+                    return (
+                      <span key={lbl} style={{ fontFamily: T.sans, fontSize: 12, padding: "4px 10px", borderRadius: 6, background: a.bg, color: a.color, border: `1px solid ${a.border}` }}>
+                        {lbl}
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+ 
+              {/* Narrative */}
+              <div style={{ fontFamily: T.sans, fontSize: 13, color: T.textMuted, lineHeight: 1.7, background: "rgba(0,0,0,0.15)", borderRadius: 8, padding: "14px 16px" }}>
+                <strong style={{ color: T.text }}>Analyse:</strong>{" "}
+                Bei einem Kaufpreis von <strong style={{ color: T.gold }}>{fmtEUR(inp.kaufpreis)}</strong> und einer
+                Jahresnettomiete von <strong style={{ color: T.gold }}>{fmtEUR(inp.jahresmiete)}</strong> ergibt sich ein
+                Kaufpreisfaktor von <strong style={{ color: T.text }}>{fmtX(res.faktor)}</strong> und eine Brutto-Rendite
+                von <strong style={{ color: res.brutto >= 5 ? T.green : T.yellow }}>{fmtPct(res.brutto)}</strong>.
+                {" "}Die Netto-Rendite nach Bewirtschaftungskosten und {inp.leerstand} % Leerstand
+                beträgt <strong style={{ color: T.text }}>{fmtPct(res.nettoRend)}</strong>.
+                {" "}Der monatliche Cashflow vor Steuer liegt bei <strong style={{ color: res.cfPreM >= 0 ? T.green : T.red }}>{fmtEUR(res.cfPreM)}</strong>.
+                {" "}Der DSCR von <strong style={{ color: res.dscr >= 1.2 ? T.green : T.yellow }}>{res.dscr.toFixed(2).replace(".",",")}</strong>{" "}
+                {res.dscr >= 1.2 ? "signalisiert solide Bankfähigkeit." : res.dscr >= 1.1 ? "liegt im Grenzbereich — Verhandlungsspielraum beim Zins prüfen." : "ist kritisch — Finanzierung gefährdet."}
+                {" "}Der IRR über 10 Jahre beträgt <strong style={{ color: T.text }}>{fmtPct(res.irrVal)}</strong> bei
+                einem MOIC von <strong style={{ color: T.text }}>{fmtX(res.moic)}</strong>.
+              </div>
+            </div>
+ 
+            {/* Detailtabelle */}
+            <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: "22px 24px" }}>
+              <h3 style={{ fontFamily: T.serif, fontSize: 17, color: T.text, margin: "0 0 18px" }}>Vollständige KPI-Übersicht</h3>
+              {[
+                { head: "Transaktion", rows: [
+                  ["Kaufpreis", fmtEUR(inp.kaufpreis)],
+                  ["Kaufnebenkosten (KNK)", fmtEUR(res.knkAbs), `${inp.knk} %`],
+                  ["→ Grunderwerbsteuer", fmtEUR(res.grunderwerbsteuer)],
+                  ["→ Notar / Grundbuch", fmtEUR(res.notarGrundbuch)],
+                  ["→ Makler (est.)", fmtEUR(res.makler)],
+                  ["Gesamtinvestition", fmtEUR(res.gesamt), "SUMME"],
+                ]},
+                { head: "Ertrag & Rendite", rows: [
+                  ["Jahresmiete (Brutto)", fmtEUR(inp.jahresmiete)],
+                  ["Bewirtschaftungskosten", fmtEUR(res.bewKosten), `-${inp.bew} %`],
+                  ["Leerstandsverlust", fmtEUR(res.leerstandAbs), `-${inp.leerstand} %`],
+                  ["Instandhaltungsrücklage", fmtEUR(res.ihr), "auto"],
+                  ["Nettomietertrag", fmtEUR(res.nettoMiete)],
+                  ["NOI (Net Operating Income)", fmtEUR(res.noi)],
+                  ["Bruttorendite", fmtPct(res.brutto)],
+                  ["Netto-Mietrendite", fmtPct(res.nettoRend)],
+                  ["Kapitalisierungsrate (Cap Rate)", fmtPct(res.capRate)],
+                  ["Kaufpreisfaktor", fmtX(res.faktor)],
+                ]},
+                { head: "Finanzierung", rows: [
+                  ["Eigenkapital", fmtEUR(res.ekAbs), `${inp.ek} %`],
+                  ["Fremdkapital (Darlehen)", fmtEUR(res.fk)],
+                  ["LTV (Loan-to-Value)", fmtPct(res.ltv, 1)],
+                  ["Sollzinssatz", fmtPct(inp.zins, 1)],
+                  ["Zinslast p.a.", fmtEUR(res.zinslast)],
+                  ["Tilgung p.a.", fmtEUR(res.tilgAbs), `${inp.tilgung} %`],
+                  ["Kapitaldienst gesamt p.a.", fmtEUR(res.kd)],
+                  ["DSCR", res.dscr.toFixed(2).replace(".",",")],
+                ]},
+                { head: "Cashflow & Steuer", rows: [
+                  ["AfA p.a.", fmtEUR(res.afa), inp.isDenkmal ? "§7i Denkmal" : `${inp.regAfa} %`],
+                  ["Steuerliches Ergebnis p.a.", fmtEUR(res.stlErgebnis)],
+                  ["Steuerlast p.a.", fmtEUR(res.steuerlast), `${inp.steuer} % Steuersatz`],
+                  ["Cashflow / Monat (vor Steuer)", fmtEUR(res.cfPreM)],
+                  ["Cashflow / Monat (nach Steuer)", fmtEUR(res.cfPostM)],
+                  ["Break-Even-Miete / Monat", fmtEUR(res.beMonat)],
+                ]},
+                { head: "Investment-Returns", rows: [
+                  ["ROE (Eigenkapitalrendite)", fmtPct(res.roe)],
+                  ["ROI (Gesamtkapitalrendite)", fmtPct(res.roi)],
+                  ["IRR (10 Jahre)", fmtPct(res.irrVal)],
+                  ["NPV (Kapitalwert)", fmtEUR(res.npvVal), `@ ${inp.diskont} % Diskont`],
+                  ["MOIC", fmtX(res.moic)],
+                  ["EK-Amortisation", res.amort ? fmtYr(res.amort) : "Negativ"],
+                ]},
+              ].map(({ head, rows }) => (
+                <div key={head} style={{ marginBottom: 24 }}>
+                  <div style={{ fontSize: 11, color: T.gold, textTransform: "uppercase", letterSpacing: "0.1em", fontWeight: 700, marginBottom: 8, borderBottom: `1px solid ${T.border}`, paddingBottom: 6 }}>
+                    {head}
+                  </div>
+                  {rows.map(([label, value, note], i) => (
+                    <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 0", borderBottom: `1px solid ${T.surface3}` }}>
+                      <span style={{ color: T.textMuted, fontSize: 13 }}>{label}</span>
+                      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                        {note && <span style={{ fontSize: 11, color: T.textDim }}>{note}</span>}
+                        <span style={{ fontFamily: T.mono, fontSize: 13, color: T.text }}>{value}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+ 
+            {/* Disclaimer */}
+            <div style={{ background: T.surface2, border: `1px solid ${T.border}`, borderRadius: 10, padding: "16px 20px", marginTop: 16 }}>
+              <div style={{ fontSize: 11, color: T.textDim, lineHeight: 1.6 }}>
+                <strong style={{ color: T.textMuted }}>Rechtlicher Hinweis:</strong>{" "}
+                Die von YieldBase generierten Ergebnisse sind mathematische Modellsimulationen und dienen ausschließlich der Orientierung.
+                Sie ersetzen keine rechtliche, steuerliche oder finanzielle Beratung. Berechnungsmethodik orientiert sich an ImmoWertV und deutschen Steuervorschriften.
+                © {new Date().getFullYear()} YieldBase Analytics. Alle Rechte vorbehalten.
+              </div>
+            </div>
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}
+ 
