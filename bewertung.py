@@ -1,5 +1,5 @@
 /**
- * YieldBase v2 — Immobilien-Investment-Analyse
+# * YieldBase v2 — Immobilien-Investment-Analyse
  * Senior React Implementation — Production Grade
  * Standalone-Komponente, keine externen Dependencies außer recharts
  */
