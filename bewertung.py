@@ -1,4 +1,3 @@
-!/usr/bin/env python3
 """
 YieldBase v4 — Immobilien-Investment-Analyse
 Python/Streamlit · GitHub-kompatibel
