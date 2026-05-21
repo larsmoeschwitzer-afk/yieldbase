@@ -462,4 +462,4 @@ with t4:
             liegt bei <strong style="color: {T['text']}">{fmt_eur(res['cfPreM'])}</strong>. Der DSCR von <strong style="color: {T['text']}">{res['dscr']:.2f}</strong> {'signalisiert eine solide Bankfähigkeit.' if res['dscr'] >= 1.2 else 'ist kritisch und gefährdet die Finanzierung.'}
         </div>
     </div>
-    """, unsafe_allow_html=True)
+    """, unsafe_allow_html=True) # <--- HIER MUSS ES STEHEN
