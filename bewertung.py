@@ -439,7 +439,8 @@ with t3:
     st.dataframe(pd.DataFrame(sc_data), use_container_width=True, hide_index=True)
 
 with t4:
-    st.markdown(f"""
+    # Wir speichern den HTML-String in einer Variable, das macht den Code übersichtlicher
+    bericht_html = f"""
     <div style="background: {T['surface']}; border: 1px solid {T['border']}; border-radius: 16px; padding: 36px; margin-bottom: 20px; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05);">
         <div style="font-weight: 700; font-size: 2.2rem; color: {T['text']}; margin-bottom: 4px; letter-spacing: -0.02em;">Investment Summary</div>
         <div style="font-size: 0.95rem; color: {T['textDim']}; margin-bottom: 30px;">YieldBase Analytics v2</div>
@@ -462,4 +463,7 @@ with t4:
             liegt bei <strong style="color: {T['text']}">{fmt_eur(res['cfPreM'])}</strong>. Der DSCR von <strong style="color: {T['text']}">{res['dscr']:.2f}</strong> {'signalisiert eine solide Bankfähigkeit.' if res['dscr'] >= 1.2 else 'ist kritisch und gefährdet die Finanzierung.'}
         </div>
     </div>
-    """, unsafe_allow_html=True) # <--- HIER MUSS ES STEHEN
+    """
+    
+    # st.html rendert den String direkt als HTML
+    st.html(bericht_html)
