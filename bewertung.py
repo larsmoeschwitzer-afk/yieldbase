@@ -1,7 +1,8 @@
+#!/usr/bin/env python3
 """
 YieldBase v4 — Immobilien-Investment-Analyse
 Python/Streamlit · GitHub-kompatibel
- 
+
 v4 Änderungen gemäß Spezifikation:
   • Alle Emojis/Icons aus UI entfernt — professionelles, cleanes Design
   • Exakte monatliche Annuitätenberechnung (Zins = Restschuld × Zinssatz/12)
@@ -12,25 +13,25 @@ v4 Änderungen gemäß Spezifikation:
   • round(v, 2) für alle Währungsberechnungen (kein Float-Artefakt)
   • Progressive Disclosure: Einsteiger / Experte / Pro
 """
- 
+
 import streamlit as st
- 
+
 st.set_page_config(
     page_title="YieldBase | Immobilien-Investment-Analyse",
     page_icon="◆",
     layout="wide",
     initial_sidebar_state="expanded",
 )
- 
+
 import plotly.graph_objects as go
 import pandas as pd
 import numpy as np
 from datetime import datetime
- 
+
 # ══════════════════════════════════════════════════════════════════════
 # 1. KONSTANTEN
 # ══════════════════════════════════════════════════════════════════════
- 
+
 BUNDESLAND_GEST: dict[str, float] = {
     "Bayern": 3.5,            "Sachsen": 3.5,
     "Hamburg": 5.5,
@@ -43,7 +44,7 @@ BUNDESLAND_GEST: dict[str, float] = {
     "Saarland": 6.5,          "Schleswig-Holstein": 6.5,
     "Thüringen": 6.5,
 }
- 
+
 # AfA-Sätze nach § 7 Abs. 4 EStG
 AFA_REGELN = [
     {"von": 2023, "satz": 3.0, "label": "3,0 % – Neubau ab 2023",
@@ -56,25 +57,25 @@ AFA_REGELN = [
      "basis": "§ 7 Abs. 4 S.1 Nr. 2b EStG",
      "note":  "Lineare AfA über 40 J. für Gebäudesubstanz vor 1925."},
 ]
- 
+
 # Pro-Modus: AfA-Optionen (Selectbox-Werte)
 PRO_AFA_OPTIONEN = {"2,0 %": 2.0, "2,5 %": 2.5, "3,0 %": 3.0}
- 
+
 # CSS-Klassen für Ampel — keine Inline-Farben → dark-mode-kompatibel
 AMPEL = {
     "g": {"cls": "yb-g", "t": "Gut"},
     "y": {"cls": "yb-y", "t": "Prüfen"},
     "r": {"cls": "yb-r", "t": "Kritisch"},
 }
- 
+
 # ══════════════════════════════════════════════════════════════════════
 # 2. DESIGN-SYSTEM — vollständig adaptiv (Light & Dark)
 # ══════════════════════════════════════════════════════════════════════
- 
+
 CSS = """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
- 
+
 /* Design-Token Light */
 :root {
   --yb-font:  'Inter', -apple-system, 'Segoe UI', sans-serif;
@@ -86,7 +87,7 @@ CSS = """
   --c-y: #b45309; --bg-y: rgba(180,83,9,.09);    --br-y: rgba(180,83,9,.28);
   --c-r: #9f1239; --bg-r: rgba(159,18,57,.09);   --br-r: rgba(159,18,57,.28);
 }
- 
+
 /* Dark-Mode (OS) */
 @media (prefers-color-scheme: dark) {
   :root {
@@ -102,16 +103,16 @@ CSS = """
   --c-y: #fbbf24 !important;  --bg-y: rgba(251,191,36,.12) !important;  --br-y: rgba(251,191,36,.3) !important;
   --c-r: #fb7185 !important;  --bg-r: rgba(251,113,133,.12) !important; --br-r: rgba(251,113,133,.3) !important;
 }
- 
+
 /* Ampel-Klassen */
 .yb-g { --amp-c: var(--c-g); --amp-bg: var(--bg-g); --amp-br: var(--br-g); }
 .yb-y { --amp-c: var(--c-y); --amp-bg: var(--bg-y); --amp-br: var(--br-y); }
 .yb-r { --amp-c: var(--c-r); --amp-bg: var(--bg-r); --amp-br: var(--br-r); }
- 
+
 /* Basis */
 html, body, [class*="css"] { font-family: var(--yb-font) !important; font-size: var(--fs-base); }
 .main .block-container { padding: 1.2rem 1.8rem 2rem; max-width: 1380px; }
- 
+
 /* KPI-Karte */
 .kpi {
   background: var(--background-color, #fff); border-radius: 10px; padding: 12px 14px;
@@ -131,7 +132,7 @@ html, body, [class*="css"] { font-family: var(--yb-font) !important; font-size: 
   color: color-mix(in srgb, var(--text-color, #999) 55%, transparent); }
 .kpi-badge { position: absolute; top: 10px; right: 8px; font-size: 9px; font-weight: 700;
   border-radius: 4px; padding: 2px 6px; color: var(--amp-c); background: var(--amp-bg); }
- 
+
 /* Status-Bar */
 .sb-wrap { display: grid; grid-template-columns: repeat(6, 1fr);
   background: var(--secondary-background-color, #f7f6f3);
@@ -141,7 +142,7 @@ html, body, [class*="css"] { font-family: var(--yb-font) !important; font-size: 
 .sb-lbl { font-size: var(--fs-xs); font-weight: 600; letter-spacing: .05em; text-transform: uppercase;
   margin-bottom: 3px; color: color-mix(in srgb, var(--text-color, #888) 55%, transparent); }
 .sb-val { font-family: var(--yb-mono); font-size: var(--fs-base); font-weight: 700; color: var(--gold); }
- 
+
 /* KNK-Tabelle */
 .knk { border-radius: 8px; overflow: hidden; border: 1px solid var(--gold-br); margin-top: 8px; }
 .knk-head { background: var(--gold-bg); padding: 6px 12px; font-size: var(--fs-xs);
@@ -155,7 +156,7 @@ html, body, [class*="css"] { font-family: var(--yb-font) !important; font-size: 
 .knk-lbl { color: color-mix(in srgb, var(--text-color, #666) 70%, transparent); }
 .knk-vals { display: flex; gap: 16px; }
 .mono { font-family: var(--yb-mono); }
- 
+
 /* AfA-Badge */
 .afa-badge { background: var(--gold-bg); border: 1px solid var(--gold-br); border-radius: 8px;
   padding: 10px 12px; margin-top: 8px; display: flex; gap: 10px; align-items: flex-start; }
@@ -164,7 +165,7 @@ html, body, [class*="css"] { font-family: var(--yb-font) !important; font-size: 
 .afa-basis { font-size: var(--fs-sm); margin-bottom: 2px;
   color: color-mix(in srgb, var(--text-color, #666) 70%, transparent); }
 .afa-note  { font-size: var(--fs-sm); color: color-mix(in srgb, var(--text-color, #999) 55%, transparent); }
- 
+
 /* Summary-Banner */
 .sum-wrap { background: var(--gold-bg); border: 1px solid var(--gold-br);
   border-radius: 12px; padding: 18px 20px; margin-bottom: 12px; }
@@ -176,19 +177,19 @@ html, body, [class*="css"] { font-family: var(--yb-font) !important; font-size: 
 .sum-sub-lbl { font-size: var(--fs-xs); font-weight: 600; letter-spacing: .05em; text-transform: uppercase;
   margin-bottom: 3px; color: color-mix(in srgb, var(--text-color, #999) 50%, transparent); }
 .sum-sub-val { font-family: var(--yb-mono); font-size: var(--fs-base); font-weight: 700; color: var(--text-color, #111); }
- 
+
 /* Info-Box */
 .info-box { background: var(--secondary-background-color, #f7f6f3); border-left: 3px solid var(--gold);
   border-radius: 0 6px 6px 0; padding: 7px 11px; margin-top: 6px; font-size: var(--fs-sm);
   color: color-mix(in srgb, var(--text-color, #666) 75%, transparent); line-height: 1.5; }
 .info-strong { font-weight: 700; color: var(--gold); }
- 
+
 /* Divider */
 .div-wrap { display: flex; align-items: center; gap: 10px; margin: 18px 0 12px; }
 .div-line  { flex: 1; height: 1px; background: var(--gold); opacity: .25; }
 .div-lbl   { font-size: var(--fs-xs); color: var(--gold); font-weight: 700;
   text-transform: uppercase; letter-spacing: .1em; white-space: nowrap; }
- 
+
 /* Bericht-Zeile */
 .rep-section-head { font-size: var(--fs-xs); font-weight: 700; text-transform: uppercase;
   letter-spacing: .1em; color: var(--gold); padding: 6px 0;
@@ -201,7 +202,7 @@ html, body, [class*="css"] { font-family: var(--yb-font) !important; font-size: 
 .rep-note { font-size: var(--fs-sm); margin-right: 10px;
   color: color-mix(in srgb, var(--text-color, #aaa) 50%, transparent); }
 .rep-val { font-family: var(--yb-mono); font-size: var(--fs-base); font-weight: 600; color: var(--text-color, #111); }
- 
+
 /* Szenario-Tabelle */
 .sc-table { width: 100%; border-collapse: collapse; font-size: var(--fs-base); }
 .sc-table th { padding: 8px 12px; font-size: var(--fs-xs); text-transform: uppercase;
@@ -210,12 +211,12 @@ html, body, [class*="css"] { font-family: var(--yb-font) !important; font-size: 
   color: color-mix(in srgb, var(--text-color, #888) 65%, transparent); }
 .sc-table td { padding: 7px 12px; border-bottom: 1px solid rgba(128,128,128,.07); color: var(--text-color, #333); }
 .sc-table tr:nth-child(even) td { background: color-mix(in srgb, var(--secondary-background-color, #f7f6f3) 50%, transparent); }
- 
+
 /* Disclaimer */
 .disclaimer { font-size: var(--fs-sm); line-height: 1.6; border-radius: 7px;
   padding: 10px 12px; margin-top: 12px; background: var(--secondary-background-color, #f7f6f3);
   color: color-mix(in srgb, var(--text-color, #aaa) 55%, transparent); }
- 
+
 /* Header */
 .yb-header { background: var(--secondary-background-color, #f7f6f3);
   border-bottom: 1px solid rgba(128,128,128,.15); padding: .8rem 1.5rem;
@@ -225,7 +226,7 @@ html, body, [class*="css"] { font-family: var(--yb-font) !important; font-size: 
   color: var(--text-color, #111); letter-spacing: -.02em; }
 .yb-sub  { font-size: var(--fs-xs); color: var(--gold); letter-spacing: .1em;
   text-transform: uppercase; font-weight: 700; }
- 
+
 /* Streamlit-Widget-Overrides */
 html, body, [class*="css"] { font-family: var(--yb-font) !important; }
 [data-testid="stMetricValue"] { font-family: var(--yb-mono) !important; font-size: var(--fs-xl) !important; }
@@ -242,11 +243,11 @@ html, body, [class*="css"] { font-family: var(--yb-font) !important; }
 [data-testid="stSidebar"] > div:first-child { padding: 1.2rem 1rem; }
 </style>
 """
- 
+
 # ══════════════════════════════════════════════════════════════════════
 # 3. FORMAT-HELFER — kaufmännische Rundung auf 2 Dezimalstellen
 # ══════════════════════════════════════════════════════════════════════
- 
+
 def fmt_eur(v) -> str:
     """Formatiert einen Wert als Euro-Betrag (de-DE, 2 Dezimalstellen intern)."""
     try:
@@ -257,39 +258,39 @@ def fmt_eur(v) -> str:
     a = abs(v)
     if a >= 1_000_000: return f"{sign}{a / 1_000_000:.2f}".replace(".", ",") + " Mio. €"
     return f"{sign}{a:,.0f} €".replace(",", ".")
- 
+
 def fmt_pct(v, dec: int = 2) -> str:
     try:
         if not np.isfinite(float(v)): return "—"
         return f"{float(v):.{dec}f}".replace(".", ",") + " %"
     except (TypeError, ValueError): return "—"
- 
+
 def fmt_x(v) -> str:
     try:
         f = float(v)
         if not np.isfinite(f) or f > 99: return "> 99x"
         return f"{f:.1f}".replace(".", ",") + "x"
     except (TypeError, ValueError): return "—"
- 
+
 def fmt_yr(v) -> str:
     try:
         f = float(v)
         if not np.isfinite(f) or f > 99: return "n.v."
         return f"{f:.1f}".replace(".", ",") + " J."
     except (TypeError, ValueError): return "—"
- 
+
 # ══════════════════════════════════════════════════════════════════════
 # 4. CALC ENGINE
 # ══════════════════════════════════════════════════════════════════════
- 
+
 def get_afa_info(baujahr: int) -> dict:
     """Ermittelt AfA-Satz + rechtliche Grundlage aus dem Baujahr (§ 7 EStG)."""
     for r in AFA_REGELN:
         if baujahr >= r["von"]:
             return r
     return AFA_REGELN[-1]
- 
- 
+
+
 def calc_ihr(kaufpreis: float, baujahr: int) -> float:
     """
     Instandhaltungsrücklage (IHR) — kaufpreisbasierte Näherung, baualtersgestaffelt.
@@ -300,8 +301,8 @@ def calc_ihr(kaufpreis: float, baujahr: int) -> float:
     if age < 25:  return kaufpreis * 0.006
     if age < 40:  return kaufpreis * 0.010
     return kaufpreis * 0.013
- 
- 
+
+
 def calc_irr(initial: float, cashflows: list) -> float:
     """Interner Zinsfuß via Newton-Raphson."""
     rate = 0.08
@@ -316,40 +317,40 @@ def calc_irr(initial: float, cashflows: list) -> float:
         if abs(rn - rate) < 1e-6: return rn * 100.0
         rate = min(max(rn, -0.999), 50.0)
     return rate * 100.0
- 
- 
+
+
 def calc_npv(initial: float, cashflows: list, rate: float) -> float:
     return initial + sum(c / (1.0 + rate) ** (t + 1) for t, c in enumerate(cashflows))
- 
- 
+
+
 def calc_monat(restschuld: float, monatsrate: float,
                zins_rate_m: float) -> tuple[float, float, float]:
     """
     Berechnet einen Monat des Annuitätendarlehens mit Sanity-Check.
- 
+
     Formeln (gem. Spezifikation):
         Zins     = Restschuld × Zinssatz / 12
         Tilgung  = Monatsrate − Zinsanteil
         Neue RS  = Restschuld − Tilgung  (min. 0)
- 
+
     Sanity-Check: |Zins + Tilgung − Monatsrate| ≤ 0,01 €.
     Bei Überschreitung wird die Tilgung exakt korrigiert.
- 
+
     Returns: (zins_m, tilgung_m, neue_restschuld) — alle auf 2 Dezimalstellen.
     """
     zins_m    = round(restschuld * zins_rate_m, 2)
     tilgung_m = round(monatsrate - zins_m, 2)
- 
+
     # Sanity-Check: Summe muss der Monatsrate entsprechen
     differenz = abs(round(zins_m + tilgung_m, 2) - monatsrate)
     if differenz > 0.01:
         # Präzise Korrektur: Tilgung wird exakt aus der Differenz bestimmt
         tilgung_m = round(monatsrate - zins_m, 2)
- 
+
     neue_restschuld = max(0.0, round(restschuld - tilgung_m, 2))
     return zins_m, tilgung_m, neue_restschuld
- 
- 
+
+
 def calc_all(p: dict) -> dict:
     """
     Master-Berechnung aller Standard-KPIs.
@@ -357,7 +358,7 @@ def calc_all(p: dict) -> dict:
     Alle Werte auf 2 Dezimalstellen gerundet (kaufmännisch).
     """
     kp = p["kaufpreis"]
- 
+
     # ── Transaktion ──────────────────────────────────────────────────
     knk_pct    = round(p["gest"] + p["notar"] + p["makler"], 4)
     gest_abs   = round(kp * p["gest"]   / 100, 2)
@@ -365,7 +366,7 @@ def calc_all(p: dict) -> dict:
     makler_abs = round(kp * p["makler"] / 100, 2)
     knk_abs    = round(kp * knk_pct     / 100, 2)
     gesamt     = round(kp + knk_abs, 2)
- 
+
     # ── AfA ──────────────────────────────────────────────────────────
     afa_info  = get_afa_info(p["baujahr"])
     afa_basis = round(gesamt * p["gebaeude"] / 100, 2)
@@ -376,19 +377,19 @@ def calc_all(p: dict) -> dict:
     else:
         afa_rate_used = p["afa_override"] if p["afa_manual"] else afa_info["satz"]
         afa           = round(afa_basis * afa_rate_used / 100, 2)
- 
+
     # ── Erträge ──────────────────────────────────────────────────────
     bew_k    = round(p["jahresmiete"] * p["bew"]       / 100, 2)
     leer_abs = round(p["jahresmiete"] * p["leerstand"] / 100, 2)
     ihr_val  = round(calc_ihr(kp, p["baujahr"]), 2)
     noi      = round(p["jahresmiete"] - bew_k - ihr_val, 2)
     netto    = round(p["jahresmiete"] - bew_k - leer_abs - ihr_val, 2)
- 
+
     brutto   = round(p["jahresmiete"] / kp * 100, 2) if kp else 0.0
     faktor   = round(kp / p["jahresmiete"], 1)        if p["jahresmiete"] else 0.0
     netto_r  = round(netto / gesamt * 100, 2)          if gesamt else 0.0
     cap_rate = round(noi   / kp     * 100, 2)          if kp     else 0.0
- 
+
     # ── Finanzierung ─────────────────────────────────────────────────
     ek_abs    = round(gesamt * p["ek"] / 100, 2)
     fk        = round(gesamt - ek_abs, 2)
@@ -399,26 +400,26 @@ def calc_all(p: dict) -> dict:
     kd        = annuitaet
     ltv       = round(fk / kp * 100, 1) if kp else 0.0
     dscr      = round(netto / kd, 2)    if kd else 99.0
- 
+
     # ── Steuer & Cashflow (Standard-Modus) ────────────────────────────
     stl_erg    = round(netto - zins_j1 - afa, 2)
     steuerlast = round(stl_erg * p["steuer"] / 100, 2)
     cf_pre_m   = round((netto - kd) / 12, 2)
     cf_post_m  = round((netto - kd - steuerlast) / 12, 2)
- 
+
     # ── Returns ──────────────────────────────────────────────────────
     roe = round((netto - zins_j1) / ek_abs * 100, 2) if ek_abs else 0.0
     roi = round(netto / gesamt * 100, 2)              if gesamt else 0.0
- 
+
     # ── Break-Even (inkl. Leerstand) ─────────────────────────────────
     kostensatz = round((p["bew"] + p["leerstand"]) / 100, 6)
     be_m  = round(kd / (1 - kostensatz) / 12, 2) if (kostensatz < 1 and kd) else 0.0
     amort = round(ek_abs / (cf_post_m * 12), 1)  if cf_post_m * 12 > 0 else None
- 
+
     # ── 10-Jahres-Projektion (exakte monatliche Berechnung) ──────────
     proj, irr_cfs, cum_cf = [], [], 0.0
     debt, m_brutto, iw = fk, p["jahresmiete"], kp
- 
+
     for y in range(1, 11):
         # Monatliche Annuitätenberechnung für dieses Jahr
         zinsen_y  = 0.0
@@ -426,7 +427,7 @@ def calc_all(p: dict) -> dict:
             zins_m, tilg_m, debt = calc_monat(debt, monatsrate, zins_rate_m)
             zinsen_y += zins_m
         zinsen_y = round(zinsen_y, 2)
- 
+
         # Jährlicher Nettomietertrag (Bewirtschaftung + Leerstand + IHR bereits abgezogen)
         mn     = round(m_brutto * (1 - p["bew"] / 100 - p["leerstand"] / 100) - ihr_val, 2)
         y_cf   = round(mn - annuitaet, 2)
@@ -435,7 +436,7 @@ def calc_all(p: dict) -> dict:
         cum_cf  = round(cum_cf + y_cfp, 2)
         iw     = round(iw * (1 + p["wert"] / 100), 2)
         eq     = round(iw - debt, 2)
- 
+
         irr_cfs.append(round(y_cfp + (max(0.0, eq - ek_abs) if y == 10 else 0.0), 2))
         proj.append({
             "Jahr":           f"J{y}",
@@ -446,13 +447,13 @@ def calc_all(p: dict) -> dict:
             "Restschuld":     debt,
         })
         m_brutto = round(m_brutto * (1 + p["miets"] / 100), 2)
- 
+
     try:    irr_val = round(calc_irr(-ek_abs, irr_cfs), 2)
     except: irr_val = 0.0
     npv_val  = round(calc_npv(-ek_abs, irr_cfs, p["diskont"] / 100))
     final_eq = proj[-1]["Equity"] if proj else ek_abs
     moic     = round((cum_cf + final_eq) / ek_abs, 2) if ek_abs else 0.0
- 
+
     return dict(
         knk_pct=knk_pct, knk_abs=knk_abs, gest_abs=gest_abs,
         notar_abs=notar_abs, makler_abs=makler_abs, gesamt=gesamt,
@@ -465,12 +466,12 @@ def calc_all(p: dict) -> dict:
         roe=roe, roi=roi, be_m=be_m, amort=amort,
         irr_val=irr_val, npv_val=npv_val, moic=moic, proj=proj,
     )
- 
- 
+
+
 def calc_pro_10year(params: dict, res: dict, pro: dict) -> list[dict]:
     """
     Pro-Modus: 10-Jahres-Prognose mit steuerlicher Betrachtung.
- 
+
     Berechnet für jedes Jahr:
       - Exakte monatliche Annuität (Sanity-Check auf jede Iteration)
       - Nettomietertrag mit jährlicher Mietsteigerung
@@ -479,9 +480,9 @@ def calc_pro_10year(params: dict, res: dict, pro: dict) -> list[dict]:
           ZvE = Nettomietertrag − Schuldzinsen − AfA
       - Cashflow nach Steuern = CF vor Steuern − Steuerlast
       - Steuer-Effekt = −Steuerlast (positiv = Ersparnis)
- 
+
     Sanity-Check pro Monat: |Zins + Tilgung − Monatsrate| ≤ 0,01 €
- 
+
     Returns: Liste mit einem Dict pro Jahr (1–10).
     """
     fk          = res["fk"]
@@ -489,58 +490,58 @@ def calc_pro_10year(params: dict, res: dict, pro: dict) -> list[dict]:
     monatsrate  = res["monatsrate"]          # Konstante Monatsrate
     zins_rate_m = res["zins_rate_m"]         # Monatlicher Zinssatz (dezimal)
     ihr_basis   = res["ihr_val"]             # IHR Basisjahr (wird inflationiert)
- 
+
     # Gebäudewert + AfA nach Pro-Modus-Parametern
     # Spezifikation: Gebäudewert = Kaufpreis × Anteil (nicht Gesamtinvestition)
     gebaeude_wert = round(params["kaufpreis"] * params["gebaeude"] / 100, 2)
     afa_pro_pa    = round(gebaeude_wert * pro["afa_satz"] / 100, 2)
- 
+
     jahre      = []
     restschuld = fk
- 
+
     for j in range(1, 11):
         # ── Mietsteigerung ────────────────────────────────────────────
         faktor_miete   = (1 + pro["miets"]      / 100) ** (j - 1)
         miete_brutto_j = round(params["jahresmiete"] * faktor_miete, 2)
         leer_abs_j     = round(miete_brutto_j * params["leerstand"] / 100, 2)
- 
+
         # ── Kostensteigerung ──────────────────────────────────────────
         faktor_kosten = (1 + pro["kosten_inf"] / 100) ** (j - 1)
         bew_k_j       = round(miete_brutto_j * params["bew"] / 100, 2)   # steigt mit Miete
         ihr_j         = round(ihr_basis * faktor_kosten, 2)               # steigt mit Inflation
- 
+
         # ── Nettomietertrag (Basis für CF und ZvE) ────────────────────
         # = Effektive Mieteinnahmen − nicht umlegbare Kosten
         netto_j = round(miete_brutto_j - bew_k_j - leer_abs_j - ihr_j, 2)
- 
+
         # ── Exakte monatliche Annuitätenberechnung ────────────────────
         zinsen_j  = 0.0
         tilgung_j = 0.0
- 
+
         for _ in range(12):
             zins_m, tilg_m, restschuld = calc_monat(restschuld, monatsrate, zins_rate_m)
             zinsen_j  = round(zinsen_j  + zins_m, 2)
             tilgung_j = round(tilgung_j + tilg_m, 2)
- 
+
         # Plausibilitäts-Check Jahressumme: Zins + Tilgung ≈ Annuität
         # (Toleranz: max. ~0,12 € durch 12-fache Rundung auf 2 Dezimalstellen)
         kd_check = round(zinsen_j + tilgung_j, 2)
         kd_diff  = abs(kd_check - round(annuitaet, 2))
         # Wird nicht propagiert — mathematisch unvermeidbare Rundungstoleranz
- 
+
         # ── Cashflow vor Steuern ──────────────────────────────────────
         cf_vor_j = round(netto_j - annuitaet, 2)
- 
+
         # ── Zu versteuerndes Einkommen (§21 EStG, V+V) ───────────────
         # ZvE = Nettomietertrag − Schuldzinsen − AfA
         # (Bew.kosten und IHR bereits im Nettomietertrag abgezogen)
         zve_j        = round(netto_j - zinsen_j - afa_pro_pa, 2)
         steuerlast_j = round(zve_j * pro["grenzzinssatz"] / 100, 2)
         # Negativ = Steuerersparnis → verbessert Cashflow
- 
+
         cf_nach_j      = round(cf_vor_j - steuerlast_j, 2)
         steuer_effekt_j = round(-steuerlast_j, 2)  # positiv = Ersparnis
- 
+
         jahre.append({
             "jahr":                 j,
             "miete_brutto":         miete_brutto_j,
@@ -558,13 +559,13 @@ def calc_pro_10year(params: dict, res: dict, pro: dict) -> list[dict]:
             "gebaeude_wert":        gebaeude_wert,
             "afa_pro_pa":           afa_pro_pa,
         })
- 
+
     return jahre
- 
+
 # ══════════════════════════════════════════════════════════════════════
 # 5. AMPEL-LOGIK
 # ══════════════════════════════════════════════════════════════════════
- 
+
 def get_ampel(key: str, val: float) -> str:
     rules = {
         "brutto":    lambda v: "g" if v >= 6   else ("y" if v >= 4    else "r"),
@@ -582,11 +583,11 @@ def get_ampel(key: str, val: float) -> str:
     }
     fn = rules.get(key)
     return fn(val) if fn else "y"
- 
+
 # ══════════════════════════════════════════════════════════════════════
 # 6. HTML-KOMPONENTEN — class-basiert, theme-adaptiv, keine Emojis
 # ══════════════════════════════════════════════════════════════════════
- 
+
 def kpi_card(label: str, value: str, sub: str | None = None,
              key: str | None = None, val: float | None = None,
              compact: bool = False) -> str:
@@ -602,7 +603,7 @@ def kpi_card(label: str, value: str, sub: str | None = None,
             f'<div class="kpi-lbl">{label}</div>'
             f'<div class="kpi-val {vsz}">{value}</div>'
             f'{sub_h}{badge}</div>')
- 
+
 def status_bar(items: list[tuple]) -> str:
     cells = "".join(
         f'<div class="sb-cell"><div class="sb-lbl">{l}</div>'
@@ -610,13 +611,13 @@ def status_bar(items: list[tuple]) -> str:
         for l, v in items
     )
     return f'<div class="sb-wrap">{cells}</div>'
- 
+
 def divider(label: str) -> str:
     return (f'<div class="div-wrap">'
             f'<div class="div-line"></div>'
             f'<div class="div-lbl">{label}</div>'
             f'<div class="div-line"></div></div>')
- 
+
 def knk_table(bundesland, gest, notar, makler, res) -> str:
     rows = [
         (f"Grunderwerbsteuer ({bundesland})", f"{gest:.1f} %", fmt_eur(res["gest_abs"])),
@@ -634,7 +635,7 @@ def knk_table(bundesland, gest, notar, makler, res) -> str:
             f'<div class="knk-row knk-total"><span>KNK gesamt</span>'
             f'<span class="knk-vals"><span>{res["knk_pct"]:.2f} %</span>'
             f'<span>{fmt_eur(res["knk_abs"])}</span></span></div></div>')
- 
+
 def afa_badge(ai, afa_val, afa_rate_used, gebaeude, gesamt) -> str:
     used = (f'{afa_rate_used:.1f} % · {ai["basis"]}' if afa_rate_used else "Denkmal § 7i EStG")
     return (f'<div class="afa-badge"><span class="afa-icon">§</span><div>'
@@ -644,7 +645,7 @@ def afa_badge(ai, afa_val, afa_rate_used, gebaeude, gesamt) -> str:
             f'<div style="margin-top:6px;font-size:12px;">'
             f'AfA p.a.: <span class="info-strong">{fmt_eur(afa_val)}</span>'
             f' · {used}</div></div></div>')
- 
+
 def summary_banner(gesamt_val, jahresmiete_val, ek_val, knk_pct_val) -> str:
     items = [("Gesamtinvestition", fmt_eur(gesamt_val)),
              ("Jahresmiete brutto", fmt_eur(jahresmiete_val)),
@@ -657,19 +658,19 @@ def summary_banner(gesamt_val, jahresmiete_val, ek_val, knk_pct_val) -> str:
             f'<div class="sum-label">Gesamtinvestition (inkl. {knk_pct_val:.2f} % KNK)</div>'
             f'<div class="sum-total">{fmt_eur(gesamt_val)}</div>'
             f'<div class="sum-grid">{subs}</div></div>')
- 
+
 def rep_section(title: str) -> str:
     return f'<div class="rep-section-head">{title}</div>'
- 
+
 def rep_row(label: str, value: str, note: str = "") -> str:
     note_h = f'<span class="rep-note">{note}</span>' if note else ""
     return (f'<div class="rep-row"><span class="rep-lbl">{label}</span>'
             f'<span>{note_h}<span class="rep-val">{value}</span></span></div>')
- 
+
 # ══════════════════════════════════════════════════════════════════════
 # 7. CHARTS — Plotly, theme-adaptiv
 # ══════════════════════════════════════════════════════════════════════
- 
+
 _BASE = dict(
     plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
     margin=dict(t=10, b=32, l=48, r=8),
@@ -679,7 +680,7 @@ _BASE = dict(
     xaxis=dict(showgrid=False, linecolor="rgba(128,128,128,.2)", tickfont=dict(size=11)),
     yaxis=dict(gridcolor="rgba(128,128,128,.1)", linecolor="rgba(128,128,128,.2)", tickfont=dict(size=11)),
 )
- 
+
 def chart_cashflow(proj_df: pd.DataFrame) -> go.Figure:
     """Cashflow-Verlauf (pre/post Tax) über 10 Jahre — Linienchart."""
     fig = go.Figure()
@@ -696,7 +697,7 @@ def chart_cashflow(proj_df: pd.DataFrame) -> go.Figure:
     fig.update_layout(**_BASE, height=230)
     fig.update_yaxes(ticksuffix=" €", zeroline=True, zerolinecolor="rgba(128,128,128,.2)")
     return fig
- 
+
 def chart_equity(proj_df: pd.DataFrame) -> go.Figure:
     """Vermögensaufbau (Equity, Immobilienwert, Restschuld) — Linienchart."""
     fig = go.Figure()
@@ -711,7 +712,7 @@ def chart_equity(proj_df: pd.DataFrame) -> go.Figure:
         ))
     fig.update_layout(**_BASE, height=230)
     return fig
- 
+
 def chart_donut(kaufpreis, gest_abs, notar_abs, makler_abs) -> go.Figure:
     """Kostenstruktur-Donut."""
     data = [(l, v, c) for l, v, c in [
@@ -730,7 +731,7 @@ def chart_donut(kaufpreis, gest_abs, notar_abs, makler_abs) -> go.Figure:
     fig.update_layout(height=160, margin=dict(t=5, b=5, l=5, r=5),
                       paper_bgcolor="rgba(0,0,0,0)", showlegend=False)
     return fig
- 
+
 def chart_pro_cf(jahre: list[dict]) -> go.Figure:
     """
     Pro-Modus: Cashflow nach Steuern (monatlich) über 10 Jahre.
@@ -739,7 +740,7 @@ def chart_pro_cf(jahre: list[dict]) -> go.Figure:
     labels = [f"J{j['jahr']}" for j in jahre]
     werte  = [j["cf_nach_monat"] for j in jahre]
     farben = ["#22c55e" if v >= 0 else "#f43f5e" for v in werte]
- 
+
     fig = go.Figure(go.Bar(
         x=labels, y=werte, marker_color=farben,
         name="CF nach Steuern",
@@ -754,7 +755,7 @@ def chart_pro_cf(jahre: list[dict]) -> go.Figure:
     fig.update_yaxes(ticksuffix=" €", zeroline=False, title=None)
     fig.update_xaxes(title=None)
     return fig
- 
+
 def chart_pro_schuld(jahre: list[dict]) -> go.Figure:
     """
     Pro-Modus: Restschuld-Entwicklung über 10 Jahre.
@@ -762,7 +763,7 @@ def chart_pro_schuld(jahre: list[dict]) -> go.Figure:
     """
     labels = [f"J{j['jahr']}" for j in jahre]
     werte  = [j["restschuld"] for j in jahre]
- 
+
     fig = go.Figure(go.Scatter(
         x=labels, y=werte, mode="lines+markers",
         name="Restschuld",
@@ -775,14 +776,14 @@ def chart_pro_schuld(jahre: list[dict]) -> go.Figure:
     fig.update_yaxes(ticksuffix=" €", title=None)
     fig.update_xaxes(title=None)
     return fig
- 
+
 # ══════════════════════════════════════════════════════════════════════
 # 8. HAUPT-APP
 # ══════════════════════════════════════════════════════════════════════
- 
+
 def main() -> None:
     st.markdown(CSS, unsafe_allow_html=True)
- 
+
     # ── Header (keine Emojis) ─────────────────────────────────────────
     st.markdown(
         '<div class="yb-header">'
@@ -794,21 +795,21 @@ def main() -> None:
         '</div>',
         unsafe_allow_html=True,
     )
- 
+
     # ══════════════════════════════════════════════════════════════════
     # SIDEBAR — Progressive Disclosure, keine Emojis
     # ══════════════════════════════════════════════════════════════════
     with st.sidebar:
- 
+
         # ── Modus-Auswahl ─────────────────────────────────────────────
         mode   = st.radio("Analyse-Modus", ["Einsteiger", "Experte"],
                           horizontal=True, label_visibility="collapsed")
         is_exp = (mode == "Experte")
         st.markdown("---")
- 
+
         # ── Standort & Kaufnebenkosten ────────────────────────────────
         st.markdown("#### Standort & Kaufnebenkosten")
- 
+
         bundesland = st.selectbox(
             "Bundesland",
             list(BUNDESLAND_GEST.keys()),
@@ -818,19 +819,21 @@ def main() -> None:
         )
         gest = BUNDESLAND_GEST[bundesland]
         st.info(f"Grunderwerbsteuer {bundesland}: **{gest:.1f} %** — automatisch")
- 
+
         kaufpreis = st.number_input(
             "Kaufpreis (€)", min_value=0, value=350_000, step=5_000,
             help="Brutto-Verkaufspreis der Immobilie ohne jegliche Nebenkosten.",
         )
- 
+
         # ── KAUFPREISAUFTEILUNG (für alle Modi verfügbar) ─────────────
-        with st.expander(
-            "Erweiterte Kaufpreisaufteilung",
-            help="Hier wird der Kaufpreis in Grundstücks- und Gebäudewert aufgeteilt. "
-                 "Nur der Gebäudewert ist steuerlich abschreibbar (§ 7 EStG). "
-                 "Der Grundstücksanteil kann nicht abgeschrieben werden.",
-        ):
+        with st.expander("Erweiterte Kaufpreisaufteilung"):
+            # Erklärungstext als Caption — help-Parameter in st.expander()
+            # erst ab Streamlit 1.37 verfügbar, Caption ist abwärtskompatibel.
+            st.caption(
+                "Aufteilung des Kaufpreises in Gebäude- und Grundstückswert. "
+                "Nur der Gebäudewert ist steuerlich abschreibbar (§ 7 EStG). "
+                "Der Grundstücksanteil kann nicht abgeschrieben werden."
+            )
             gebaeude = st.slider(
                 "Gebäudewert-Anteil in Prozent", 0, 100, 80, 1,
                 help="Anteil des Kaufpreises, der auf das Gebäude entfällt. "
@@ -843,7 +846,7 @@ def main() -> None:
                 f"Gebäudewert: **{fmt_eur(geb_wert)}** — "
                 f"Grundstück: **{fmt_eur(grst_wert)}**"
             )
- 
+
         notar  = st.slider(
             "Notar + Grundbuch (%)", 0.5, 2.5, 2.0, 0.1,
             help="Notarkosten gem. GNotKG ca. 1,0–1,5 % + Grundbucheintragung ca. 0,5 % "
@@ -855,10 +858,10 @@ def main() -> None:
                  "(§ 656c BGB, Halbteilungsprinzip seit 12/2020).",
         )
         st.markdown("---")
- 
+
         # ── Objekt & Mietertrag ───────────────────────────────────────
         st.markdown("#### Objekt & Mietertrag")
- 
+
         jahresmiete = st.number_input(
             "Jahres-Kaltmiete (€)", min_value=0, value=18_000, step=500,
             help="Aktuelle Nettokaltmiete p.a. (ohne Heiz- und Betriebskosten). "
@@ -872,7 +875,7 @@ def main() -> None:
         )
         afa_info = get_afa_info(baujahr)
         st.success(f"**AfA:** {afa_info['label']}  ·  {afa_info['basis']}")
- 
+
         bew = st.slider(
             "Bewirtschaftungskosten (%)", 5, 30, 15, 1,
             help="Nicht auf den Mieter umlegbare Kosten: Hausverwaltung, Versicherung, "
@@ -885,10 +888,10 @@ def main() -> None:
                  "Reduziert die effektiven Mieteinnahmen.",
         )
         st.markdown("---")
- 
+
         # ── Finanzierung ──────────────────────────────────────────────
         st.markdown("#### Finanzierung")
- 
+
         ek = st.slider(
             "Eigenkapital-Quote (%)", 5, 100, 25, 1,
             help="Anteil der Gesamtinvestition (Kaufpreis + KNK), "
@@ -904,12 +907,12 @@ def main() -> None:
             help="Anfänglicher Tilgungssatz p.a. Die Annuität (Zins + Tilgung) bleibt konstant; "
                  "der Tilgungsanteil steigt mit sinkender Restschuld.",
         )
- 
+
         # ── Experte: Steuer, AfA & Projektion ────────────────────────
         if is_exp:
             st.markdown("---")
             st.markdown("#### Steuer, AfA & Projektion")
- 
+
             steuer = st.slider(
                 "Grenzsteuersatz (%)", 0, 45, 42, 1,
                 help="Ihr persönlicher Grenzsteuersatz. Bestimmt die Steuerlast oder "
@@ -936,7 +939,7 @@ def main() -> None:
                 afa_override = st.number_input(
                     "AfA-Satz manuell (%)", 0.5, 10.0, float(afa_info["satz"]), 0.5,
                 )
- 
+
             st.markdown("**10-Jahres-Projektion**")
             wert    = st.slider(
                 "Wertzuwachs p.a. (%)", -2.0, 6.0, 2.0, 0.5,
@@ -956,26 +959,26 @@ def main() -> None:
             afa_manual = False; dk_san = 60; dk_afa = 9.0
             afa_override = float(afa_info["satz"])
             wert = 2.0; miets = 1.5; diskont = 5.0
- 
+
         # ══════════════════════════════════════════════════════════════
         # PRO-FUNKTIONEN (immer sichtbar, unabhängig vom Modus)
         # ══════════════════════════════════════════════════════════════
         st.divider()
         st.markdown("**Pro-Funktionen**")
- 
+
         toggle_pro = st.checkbox(
             "Pro-Modus aktivieren (Steuern und Verlauf)",
             value=False,
             help="Schaltet die steuerliche Optimierung (§21 EStG) und die langfristige "
                  "10-Jahres-Vorschau mit monatlich exakter Annuitätenberechnung frei.",
         )
- 
+
         # Default-Werte für Pro-Parameter (auch wenn deaktiviert)
         pro_grenzzins  = 30.0
         pro_afa_satz   = 2.0
         pro_miets      = 2.0
         pro_kosten_inf = 2.0
- 
+
         if toggle_pro:
             with st.container():
                 pro_grenzzins = st.slider(
@@ -993,7 +996,7 @@ def main() -> None:
                          "Neubau ab 2023: 3,0 %; Standard: 2,0 %; Altbau vor 1925: 2,5 %.",
                 )
                 pro_afa_satz = PRO_AFA_OPTIONEN[pro_afa_key]
- 
+
                 pro_miets = st.slider(
                     "Jährliche Mietsteigerung in Prozent",
                     min_value=0.0, max_value=5.0, value=2.0, step=0.1,
@@ -1006,7 +1009,7 @@ def main() -> None:
                     help="Die angenommene jährliche Steigerungsrate für nicht umlegbare "
                          "Betriebskosten und Instandhaltung (z.B. Hausverwaltung, Handwerker).",
                 )
- 
+
     # ══════════════════════════════════════════════════════════════════
     # BERECHNUNG — Standard-Modus
     # ══════════════════════════════════════════════════════════════════
@@ -1023,7 +1026,7 @@ def main() -> None:
     res     = calc_all(params)
     proj_df = pd.DataFrame(res["proj"])
     ai      = res["afa_info"]
- 
+
     # BERECHNUNG — Pro-Modus (nur wenn aktiviert)
     pro_jahre: list[dict] = []
     if toggle_pro:
@@ -1034,7 +1037,7 @@ def main() -> None:
             kosten_inf    = float(pro_kosten_inf),
         )
         pro_jahre = calc_pro_10year(params, res, pro_params)
- 
+
     # ── STATUS BAR ────────────────────────────────────────────────────
     st.markdown(
         status_bar([
@@ -1047,15 +1050,15 @@ def main() -> None:
         ]),
         unsafe_allow_html=True,
     )
- 
+
     # ── TABS (keine Emojis/Icons) ────────────────────────────────────
     t1, t2, t3, t4 = st.tabs(["Eingabe & KPIs", "Dashboard", "Analyse", "Bericht"])
- 
+
     # ══════════════════════════════════════════════════════════════════
     # TAB 1 — Eingabe & KPIs
     # ══════════════════════════════════════════════════════════════════
     with t1:
- 
+
         # ── Kernmetriken mit help-Texten (st.metric) ─────────────────
         # Spec: "Die bisherigen Metriken bleiben ganz oben bestehen.
         #        Statte jede st.metric-Kachel mit einem help-Text aus."
@@ -1083,14 +1086,14 @@ def main() -> None:
                  "Bankrate (Zins + Tilgung) — vor Berücksichtigung des Finanzamts. "
                  "Negativ bedeutet monatliche Zuzahlung.",
         )
- 
+
         # ── Pro-Modus: Steuerliche Betrachtung (Jahr 1) ──────────────
         if toggle_pro and pro_jahre:
             j1 = pro_jahre[0]  # Jahr 1
- 
+
             st.markdown("---")
             st.markdown("## Steuerliche Betrachtung (Jahr 1)")
- 
+
             p1, p2 = st.columns(2)
             p1.metric(
                 "Steuer-Effekt",
@@ -1109,7 +1112,7 @@ def main() -> None:
                      "und das Finanzamt vollständig berücksichtigt wurden. "
                      "Dies ist Ihre reale Liquiditätssituation.",
             )
- 
+
             # Ergänzende Kennzahlen für Jahr 1
             with st.expander("Details zur steuerlichen Berechnung (Jahr 1)"):
                 detail_cols = st.columns(4)
@@ -1138,7 +1141,7 @@ def main() -> None:
                          "= Nettomiete − Schuldzinsen − AfA. "
                          "Negativ = steuerlicher Verlust → mindert Steuerlast.",
                 )
- 
+
             # ── 10-Jahres-Investment-Verlauf ──────────────────────────
             st.markdown("---")
             st.markdown("## 10-Jahres-Investment-Verlauf")
@@ -1149,7 +1152,7 @@ def main() -> None:
                 f"AfA {pro_afa_satz:.1f} % · "
                 f"Exakte monatliche Annuitätenberechnung"
             )
- 
+
             ch1, ch2 = st.columns(2, gap="large")
             with ch1:
                 st.markdown("**Cashflow nach Steuern (monatlich)**")
@@ -1167,7 +1170,7 @@ def main() -> None:
                     use_container_width=True,
                     config={"displayModeBar": False},
                 )
- 
+
             # Übersichts-Tabelle Pro-Jahresverlauf
             with st.expander("Detailtabelle: 10-Jahres-Prognose (Pro-Modus)"):
                 tbl_data = {
@@ -1185,12 +1188,12 @@ def main() -> None:
                     pd.DataFrame(tbl_data).set_index("Jahr"),
                     use_container_width=True,
                 )
- 
+
         st.markdown("---")
- 
+
         # ── Bestehende 2-Spalten-Übersicht ───────────────────────────
         c_l, c_r = st.columns([1, 1.3], gap="large")
- 
+
         with c_l:
             st.markdown(
                 summary_banner(res["gesamt"], jahresmiete,
@@ -1213,7 +1216,7 @@ def main() -> None:
                 f' (Monatsrate konstant)</div>',
                 unsafe_allow_html=True,
             )
- 
+
         with c_r:
             if is_exp:
                 kpis = [
@@ -1248,7 +1251,7 @@ def main() -> None:
                 with a3:
                     st.markdown(kpi_card("AfA p.a.", fmt_eur(res["afa"]),
                                          "auto", compact=True), unsafe_allow_html=True)
- 
+
             # Kostenstruktur-Donut
             st.markdown("**Kostenstruktur**")
             d1, d2 = st.columns([1, 1.2])
@@ -1274,8 +1277,7 @@ def main() -> None:
                             f'color:var(--text-color,#111)">{fmt_eur(v)}</span></div>',
                             unsafe_allow_html=True,
                         )
- 
- 
+
+
 if __name__ == "__main__":
     main()
- 
