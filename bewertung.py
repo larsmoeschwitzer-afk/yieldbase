@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-YieldBase v4 — Immobilien-Investment-Analyse
+LIEGANT v4 — Professionelle Immobilien-Investment-Analyse
 Python/Streamlit · GitHub-kompatibel
 
 v4 Änderungen gemäß Spezifikation:
@@ -17,8 +17,8 @@ v4 Änderungen gemäß Spezifikation:
 import streamlit as st
 
 st.set_page_config(
-    page_title="YieldBase | Immobilien-Investment-Analyse",
-    page_icon="◆",
+    page_title="LIEGANT | Analyse für echte Liegenschaften",
+    page_icon="▐",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -217,15 +217,43 @@ html, body, [class*="css"] { font-family: var(--yb-font) !important; font-size: 
   padding: 10px 12px; margin-top: 12px; background: var(--secondary-background-color, #f7f6f3);
   color: color-mix(in srgb, var(--text-color, #aaa) 55%, transparent); }
 
-/* Header */
-.yb-header { background: var(--secondary-background-color, #f7f6f3);
-  border-bottom: 1px solid rgba(128,128,128,.15); padding: .8rem 1.5rem;
-  margin: -1.2rem -1.8rem 1.4rem; display: flex; align-items: center; gap: .8rem;
-  box-shadow: 0 1px 4px rgba(0,0,0,.06); }
-.yb-logo { font-family: var(--yb-font); font-size: 18px; font-weight: 700;
-  color: var(--text-color, #111); letter-spacing: -.02em; }
-.yb-sub  { font-size: var(--fs-xs); color: var(--gold); letter-spacing: .1em;
-  text-transform: uppercase; font-weight: 700; }
+/* ── LIEGANT Header ─────────────────────────────────────────────── */
+.lg-header {
+  background: var(--secondary-background-color, #f5f4f1);
+  border-bottom: 1px solid rgba(128,128,128,.14);
+  padding: .9rem 1.6rem;
+  margin: -1.2rem -1.8rem 1.6rem;
+  display: flex; align-items: center; gap: 16px;
+  box-shadow: 0 1px 5px rgba(0,0,0,.05);
+}
+.lg-mark { flex-shrink: 0; display: flex; align-items: center; }
+.lg-name {
+  font-family: var(--yb-font);
+  font-size: 19px; font-weight: 700;
+  letter-spacing: .12em; text-transform: uppercase;
+  color: var(--text-color, #111); line-height: 1;
+}
+.lg-claim {
+  font-size: 9.5px; font-weight: 500;
+  letter-spacing: .16em; text-transform: uppercase;
+  color: var(--gold); margin-top: 4px; line-height: 1;
+}
+.lg-divider {
+  width: 1px; height: 32px; flex-shrink: 0;
+  background: rgba(128,128,128,.2); margin: 0 4px;
+}
+.lg-tagline {
+  font-size: var(--fs-sm); font-weight: 400;
+  color: color-mix(in srgb, var(--text-color, #888) 50%, transparent);
+  font-style: italic; letter-spacing: .01em;
+}
+.lg-version {
+  margin-left: auto; font-size: 9px; font-weight: 700;
+  letter-spacing: .14em; text-transform: uppercase;
+  color: color-mix(in srgb, var(--text-color, #999) 35%, transparent);
+  border: 1px solid rgba(128,128,128,.18);
+  border-radius: 4px; padding: 2px 7px;
+}
 
 /* Streamlit-Widget-Overrides */
 html, body, [class*="css"] { font-family: var(--yb-font) !important; }
@@ -816,14 +844,27 @@ def main() -> None:
     st.markdown(CSS, unsafe_allow_html=True)
 
     # ── Header (keine Emojis) ─────────────────────────────────────────
+    # SVG-Icon: geometrisches L-Zeichen (Surveyor-Linie) — adaptiv Light/Dark
+    _svg = (
+        '<svg width="42" height="42" viewBox="0 0 42 42" '
+        'xmlns="http://www.w3.org/2000/svg">'
+        '<line x1="13" y1="6" x2="13" y2="34" '
+        'stroke="var(--gold,#B8902A)" stroke-width="3.8" stroke-linecap="square"/>'
+        '<line x1="5" y1="34" x2="38" y2="34" '
+        'stroke="var(--gold,#B8902A)" stroke-width="3.8" stroke-linecap="square"/>'
+        '</svg>'
+    )
     st.markdown(
-        '<div class="yb-header">'
-        '<div style="width:30px;height:30px;background:linear-gradient(135deg,#b8902a,#e0c060);'
-        'border-radius:7px;display:flex;align-items:center;justify-content:center;'
-        'color:#fff;font-size:14px;font-weight:700">◆</div>'
-        '<div><div class="yb-logo">YieldBase</div>'
-        '<div class="yb-sub">Analytics v4 · Python</div></div>'
-        '</div>',
+        f'<div class="lg-header">'
+        f'<div class="lg-mark">{_svg}</div>'
+        f'<div>'
+        f'<div class="lg-name">LIEGANT</div>'
+        f'<div class="lg-claim">Analyse für echte Liegenschaften</div>'
+        f'</div>'
+        f'<div class="lg-divider"></div>'
+        f'<div class="lg-tagline">Die Analyse, die Ihr Portfolio verdient.</div>'
+        f'<div class="lg-version">v4</div>'
+        f'</div>',
         unsafe_allow_html=True,
     )
 
@@ -1389,7 +1430,7 @@ def main() -> None:
         # Pro-Modus: Jahr-fuer-Jahr-Zusammenfassung im Dashboard
         if toggle_pro and pro_jahre:
             st.markdown("---")
-            st.markdown(divider("Pro-Modus: Steuerliche Kennzahlen (Jahr 1)"), unsafe_allow_html=True)
+            st.markdown(divider("Netto-Betrachtung: Steuerliche Kennzahlen (Jahr 1)"), unsafe_allow_html=True)
             p1, p2, p3, p4 = st.columns(4)
             j1 = pro_jahre[0]
             p1.metric("Gebaeudewert",       fmt_eur(j1["gebaeude_wert"]),
@@ -1542,7 +1583,7 @@ def main() -> None:
                 f'Investment Summary</div>'
                 f'<div style="font-size:12px;margin-bottom:16px;'
                 f'color:color-mix(in srgb,var(--text-color,#aaa) 55%,transparent)">'
-                f'YieldBase v4 · {datetime.now().strftime("%d.%m.%Y")} · {bundesland}{pro_info}</div>'
+                f'LIEGANT · {datetime.now().strftime("%d.%m.%Y")} · {bundesland}{pro_info}</div>'
                 f'<div style="display:flex;gap:10px;margin-bottom:14px">{sum_cards}</div>'
                 f'<div style="display:flex;flex-wrap:wrap;gap:5px">{tags_h}</div></div>',
                 unsafe_allow_html=True,
@@ -1603,7 +1644,7 @@ def main() -> None:
 
             if toggle_pro and pro_jahre:
                 j1 = pro_jahre[0]
-                kpi_sects.append(("Pro-Modus: Steuerliche Betrachtung (Jahr 1)", [
+                kpi_sects.append(("Netto-Betrachtung (Jahr 1)", [
                     ("Gebaeudewert (Pro-Basis)",      fmt_eur(j1["gebaeude_wert"]),      f"{gebaeude} % des KP"),
                     (f"AfA p.a. ({pro_afa_satz:.1f} %)", fmt_eur(j1["afa_pro_pa"]),     "linear, konstant"),
                     ("Schuldzinsen J1 (exakt)",       fmt_eur(j1["zinsen"]),             "monatlich berechnet"),
@@ -1629,7 +1670,7 @@ def main() -> None:
                 f'AfA: {ai["label"]} — {ai["basis"]}. '
                 f'GrESt {bundesland}: {gest:.1f} %. '
                 f'Annuitaetenberechnung: monatlich exakt (Sanity-Checks aktiv). '
-                f'2025 YieldBase Analytics.</div>',
+                f'2025 LIEGANT · Analyse für echte Liegenschaften.</div>',
                 unsafe_allow_html=True,
             )
 
