@@ -1279,5 +1279,300 @@ def main() -> None:
                         )
 
 
+    # ══════════════════════════════════════════════════════════════════
+    # TAB 2 — Dashboard
+    # ══════════════════════════════════════════════════════════════════
+    with t2:
+        sects = [
+            ("Rendite & Ertrag", [
+                ("Bruttorendite",   fmt_pct(res["brutto"]),   "Jahresmiete / KP",            "brutto",  res["brutto"]),
+                ("Netto-Rendite",   fmt_pct(res["netto_r"]),  "nach Bew.+Leerstand+IHR",    "netto_r", res["netto_r"]),
+                ("Cap Rate",        fmt_pct(res["cap_rate"]), "NOI / Kaufpreis",              "cap_rate",res["cap_rate"]),
+                ("Kaufpreisfaktor", fmt_x(res["faktor"]),     None,                           "faktor",  res["faktor"]),
+                ("Jahresmiete",     fmt_eur(jahresmiete),      "Brutto",                       None,      None),
+                ("Nettomietertrag", fmt_eur(res["netto"]),     "Miete - Bew. - Leerst. - IHR",None,      None),
+            ]),
+            ("Cashflow & Liquiditaet", [
+                ("CF / Mon. (pre)",  fmt_eur(res["cf_pre_m"]),  "Vor Steuer",                 "cf_pre_m", res["cf_pre_m"]),
+                ("CF / Mon. (post)", fmt_eur(res["cf_post_m"]), "Nach Steuer",                "cf_post_m",res["cf_post_m"]),
+                ("CF / Jahr",        fmt_eur(res["cf_pre_m"]*12),"Annualisiert (pre)",         None,       None),
+                ("Break-Even-Miete", fmt_eur(res["be_m"])+"/Mon","inkl. Leerstand",            None,       None),
+                ("AfA p.a.",         fmt_eur(res["afa"]),        ai["basis"],                   None,       None),
+                ("Steuerlast p.a.",  fmt_eur(res["steuerlast"]),  f"{steuer} % Steuersatz",     None,       None),
+            ]),
+            ("Finanzierung & Verschuldung", [
+                ("DSCR",            f"{res['dscr']:.2f}".replace(".",","), "Schuldendeckung", "dscr",    res["dscr"]),
+                ("LTV (FK / KP)",   fmt_pct(res["ltv"],1),     "Bankueblich",                  "ltv",     res["ltv"]),
+                ("Eigenkapital",    fmt_eur(res["ek_abs"]),     f"{ek} %",                     None,      None),
+                ("Fremdkapital",    fmt_eur(res["fk"]),         None,                          None,      None),
+                ("Zinslast J1",     fmt_eur(res["zins_j1"]),    f"{zins} %",                   None,      None),
+                ("Annuitaet p.a.",  fmt_eur(res["annuitaet"]),  "konstant",                    None,      None),
+            ]),
+            ("Investment-Returns (10 Jahre)", [
+                ("ROE",             fmt_pct(res["roe"]),        "Leveraged Return",             "roe",     res["roe"]),
+                ("ROI",             fmt_pct(res["roi"]),        "Gesamtkapital",                None,      None),
+                ("IRR (10 J.)",     fmt_pct(res["irr_val"]),   "inkl. Wertzuwachs",           "irr_val", res["irr_val"]),
+                ("NPV",             fmt_eur(res["npv_val"]),    f"@ {diskont} % Diskont",      "npv_val", res["npv_val"]),
+                ("MOIC",            fmt_x(res["moic"]),         "CF + Equity / EK",             "moic",    res["moic"]),
+                ("EK-Amortisation", fmt_yr(res["amort"]) if res["amort"] else "Negativ",
+                 "Post-Tax-CF", None, None),
+            ]),
+        ]
+        for sec_title, cards in sects:
+            st.markdown(divider(sec_title), unsafe_allow_html=True)
+            cols = st.columns(6)
+            for i, (lbl, val, sub, k, av) in enumerate(cards):
+                with cols[i % 6]:
+                    st.markdown(kpi_card(lbl, val, sub, k, av, compact=True),
+                                unsafe_allow_html=True)
+
+        # Pro-Modus: Jahr-fuer-Jahr-Zusammenfassung im Dashboard
+        if toggle_pro and pro_jahre:
+            st.markdown("---")
+            st.markdown(divider("Pro-Modus: Steuerliche Kennzahlen (Jahr 1)"), unsafe_allow_html=True)
+            p1, p2, p3, p4 = st.columns(4)
+            j1 = pro_jahre[0]
+            p1.metric("Gebaeudewert",       fmt_eur(j1["gebaeude_wert"]),
+                      help="Kaufpreis x Gebaeudeanteil. Basis fuer die AfA.")
+            p2.metric("AfA p.a. (Pro)",     fmt_eur(j1["afa_pro_pa"]),
+                      help="Jaehrliche lineare Abschreibung des Gebaeudewertes.")
+            p3.metric("ZvE aus V+V (J1)",   fmt_eur(j1["zve"]),
+                      help="Zu versteuerndes Einkommen gemaess §21 EStG.")
+            p4.metric("CF nach Steuern/Mon",fmt_eur(j1["cf_nach_monat"]),
+                      help="Realer monatlicher Liquiditaetsueberschuss nach Steuer.")
+
+    # ══════════════════════════════════════════════════════════════════
+    # TAB 3 — Analyse
+    # ══════════════════════════════════════════════════════════════════
+    with t3:
+        ca, cb = st.columns(2, gap="large")
+        with ca:
+            st.markdown("**Cashflow-Projektion (10 Jahre)**")
+            st.caption(f"Annuitaet {fmt_eur(res['annuitaet']/12)}/Mon konstant — exakte monatliche Berechnung")
+            st.plotly_chart(chart_cashflow(proj_df), use_container_width=True,
+                            config={"displayModeBar": False})
+        with cb:
+            st.markdown("**Vermogensaufbau**")
+            st.caption("Eigenkapital = Immobilienwert - Restschuld")
+            st.plotly_chart(chart_equity(proj_df), use_container_width=True,
+                            config={"displayModeBar": False})
+
+        st.markdown("---")
+        st.markdown("**Szenario-Vergleich**")
+        st.caption(
+            "Optimistisch: +10 % Miete, -0,5 % Zins, +1,5 % Wert  |  "
+            "Pessimistisch: -10 % Miete, +0,8 % Zins, +3 % Leerstand"
+        )
+
+        p_opt  = {**params, "jahresmiete": round(jahresmiete * 1.1, 2),
+                  "zins": max(0.5, zins - 0.5), "leerstand": max(0.0, leerstand - 1.0),
+                  "wert": wert + 1.5}
+        p_pess = {**params, "jahresmiete": round(jahresmiete * 0.9, 2),
+                  "zins": zins + 0.8, "leerstand": leerstand + 3.0,
+                  "wert": max(0.0, wert - 1.5)}
+        r_opt, r_pess = calc_all(p_opt), calc_all(p_pess)
+
+        AMP_CSS = {"g": "var(--c-g)", "y": "var(--c-y)", "r": "var(--c-r)"}
+
+        def sc_td(k, v, fmt_fn):
+            c = AMP_CSS[get_ampel(k, v)]
+            return (f'<td style="text-align:right;font-family:var(--yb-mono,monospace);'
+                    f'color:{c}">{fmt_fn(v)}</td>')
+
+        sc_kpis = [
+            ("Bruttorendite",   "brutto",   fmt_pct),
+            ("Netto-Rendite",   "netto_r",  fmt_pct),
+            ("DSCR",            "dscr",     lambda v: f"{v:.2f}".replace(".", ",")),
+            ("CF / Mon. (pre)", "cf_pre_m", fmt_eur),
+            ("LTV",             "ltv",      lambda v: fmt_pct(v, 1)),
+            ("ROE",             "roe",      fmt_pct),
+            ("IRR (10 J.)",     "irr_val",  fmt_pct),
+            ("NPV",             "npv_val",  fmt_eur),
+            ("MOIC",            "moic",     fmt_x),
+        ]
+        rows_h = "".join(
+            f'<tr><td style="font-size:13px;padding:7px 12px">{lbl}</td>'
+            f'{sc_td(k, r_opt[k], fn)}{sc_td(k, res[k], fn)}{sc_td(k, r_pess[k], fn)}</tr>'
+            for lbl, k, fn in sc_kpis
+        )
+        heads = [
+            ("KPI",           "left",  "color:var(--text-color,#888)"),
+            ("Optimistisch",  "right", "color:var(--c-g)"),
+            ("Realistisch",   "right", "color:var(--gold)"),
+            ("Pessimistisch", "right", "color:var(--c-r)"),
+        ]
+        head_h = "".join(
+            f'<th style="text-align:{a};font-size:10px;font-weight:700;'
+            f'text-transform:uppercase;letter-spacing:.05em;padding:8px 12px;'
+            f'border-bottom:1px solid rgba(128,128,128,.15);{c}">{h}</th>'
+            for h, a, c in heads
+        )
+        st.markdown(
+            f'<table class="sc-table"><thead><tr>{head_h}</tr></thead>'
+            f'<tbody>{rows_h}</tbody></table>',
+            unsafe_allow_html=True,
+        )
+
+        # Pro-Modus: Detaillierte 10-Jahres-Tabelle im Analyse-Tab
+        if toggle_pro and pro_jahre:
+            st.markdown("---")
+            st.markdown("**Pro-Modus: 10-Jahres-Prognose (Steuerlich)**")
+            st.caption(
+                f"Mietsteigerung {pro_miets:.1f} % p.a.  |  "
+                f"Kosten-Inflation {pro_kosten_inf:.1f} % p.a.  |  "
+                f"Grenzzinssatz {pro_grenzzins:.0f} %  |  "
+                f"AfA {pro_afa_satz:.1f} %"
+            )
+            ch1, ch2 = st.columns(2, gap="large")
+            with ch1:
+                st.markdown("**Cashflow nach Steuern (monatlich)**")
+                st.plotly_chart(chart_pro_cf(pro_jahre), use_container_width=True,
+                                config={"displayModeBar": False})
+            with ch2:
+                st.markdown("**Restschuld-Verlauf**")
+                st.plotly_chart(chart_pro_schuld(pro_jahre), use_container_width=True,
+                                config={"displayModeBar": False})
+
+    # ══════════════════════════════════════════════════════════════════
+    # TAB 4 — Bericht
+    # ══════════════════════════════════════════════════════════════════
+    with t4:
+        col_rep, _ = st.columns([2.2, 1])
+        with col_rep:
+
+            # Ampel-Tags
+            tags_h = " ".join(
+                f'<span style="font-size:11px;font-weight:700;padding:3px 10px;'
+                f'border-radius:20px;background:var(--bg-{get_ampel(k,v)});'
+                f'color:var(--c-{get_ampel(k,v)});'
+                f'border:1px solid var(--br-{get_ampel(k,v)})">{l}</span>'
+                for l, k, v in [
+                    ("Rendite", "netto_r",  res["netto_r"]),
+                    ("CF",      "cf_pre_m", res["cf_pre_m"]),
+                    ("DSCR",    "dscr",     res["dscr"]),
+                    ("LTV",     "ltv",      res["ltv"]),
+                    ("ROE",     "roe",      res["roe"]),
+                    ("IRR",     "irr_val",  res["irr_val"]),
+                    ("NPV",     "npv_val",  res["npv_val"]),
+                    ("MOIC",    "moic",     res["moic"]),
+                ]
+            )
+            sum_cards = "".join(
+                f'<div style="flex:1;background:var(--background-color,#fff);'
+                f'border-radius:8px;padding:12px 14px;border:1px solid var(--gold-br)">'
+                f'<div style="font-size:10px;font-weight:600;text-transform:uppercase;'
+                f'letter-spacing:.06em;color:color-mix(in srgb,var(--text-color,#999) 55%,transparent);'
+                f'margin-bottom:4px">{l}</div>'
+                f'<div style="font-family:var(--yb-mono,monospace);font-size:20px;'
+                f'font-weight:700;color:var(--gold)">{v}</div></div>'
+                for l, v in [
+                    ("Gesamtinvestition",  fmt_eur(res["gesamt"])),
+                    ("Jahresmiete brutto", fmt_eur(jahresmiete)),
+                    ("Eigenkapital",       fmt_eur(res["ek_abs"])),
+                ]
+            )
+            pro_info = (
+                f" | Pro-Modus: GrenzSt. {pro_grenzzins} %, AfA {pro_afa_satz:.1f} %"
+                if toggle_pro else ""
+            )
+            st.markdown(
+                f'<div class="sum-wrap" style="border-radius:14px;padding:22px 26px">'
+                f'<div style="font-family:var(--yb-font);font-size:22px;font-weight:700;'
+                f'color:var(--text-color,#111);margin-bottom:4px;letter-spacing:-.02em">'
+                f'Investment Summary</div>'
+                f'<div style="font-size:12px;margin-bottom:16px;'
+                f'color:color-mix(in srgb,var(--text-color,#aaa) 55%,transparent)">'
+                f'YieldBase v4 · {datetime.now().strftime("%d.%m.%Y")} · {bundesland}{pro_info}</div>'
+                f'<div style="display:flex;gap:10px;margin-bottom:14px">{sum_cards}</div>'
+                f'<div style="display:flex;flex-wrap:wrap;gap:5px">{tags_h}</div></div>',
+                unsafe_allow_html=True,
+            )
+
+            st.markdown("**Vollstaendige KPI-Tabelle**")
+
+            kpi_sects = [
+                ("Transaktion", [
+                    ("Kaufpreis",                           fmt_eur(kaufpreis),         ""),
+                    (f"Grunderwerbsteuer ({bundesland})",    fmt_eur(res["gest_abs"]),   f"{gest:.1f} %"),
+                    ("Notar + Grundbuch",                    fmt_eur(res["notar_abs"]),  f"{notar:.1f} %"),
+                    ("Maklercourtage",                       fmt_eur(res["makler_abs"]),  f"{makler:.2f} %"),
+                    (f"KNK gesamt ({res['knk_pct']:.2f} %)", fmt_eur(res["knk_abs"]),  "Summe"),
+                    ("Gesamtinvestition",                    fmt_eur(res["gesamt"]),     ""),
+                ]),
+                ("Kaufpreisaufteilung", [
+                    ("Gebaeudeanteil",        f"{gebaeude} %",   ""),
+                    ("Gebaeudewert (absolut)", fmt_eur(geb_wert),  "steuerlich abschreibbar"),
+                    ("Grundstueckswert",       fmt_eur(grst_wert), "nicht abschreibbar"),
+                ]),
+                ("Ertrag & Rendite", [
+                    ("Jahresmiete (Brutto)",              fmt_eur(jahresmiete),       ""),
+                    (f"Bewirtschaftungskosten ({bew} %)",  fmt_eur(res["bew_k"]),     ""),
+                    (f"Leerstandsverlust ({leerstand} %)", fmt_eur(res["leer_abs"]),  ""),
+                    ("Instandhaltungsruecklage (auto)",   fmt_eur(res["ihr_val"]),    ""),
+                    ("Nettomietertrag",                   fmt_eur(res["netto"]),      ""),
+                    ("NOI (Cap-Rate-Basis)",              fmt_eur(res["noi"]),        "ohne Leerstand"),
+                    ("Bruttorendite",                     fmt_pct(res["brutto"]),     ""),
+                    ("Netto-Rendite",                     fmt_pct(res["netto_r"]),    ""),
+                    ("Cap Rate",                         fmt_pct(res["cap_rate"]),   ""),
+                    ("Kaufpreisfaktor",                   fmt_x(res["faktor"]),       ""),
+                ]),
+                ("Finanzierung & AfA", [
+                    ("Eigenkapital",            fmt_eur(res["ek_abs"]),      f"{ek} %"),
+                    ("Fremdkapital",            fmt_eur(res["fk"]),          ""),
+                    ("LTV (FK / Kaufpreis)",    fmt_pct(res["ltv"], 1),      ""),
+                    ("Monatsrate (konstant)",   fmt_eur(res["monatsrate"]),  "Annuitaetendarlehen"),
+                    ("Annuitaet p.a.",          fmt_eur(res["annuitaet"]),   ""),
+                    ("Zinslast J1 (Naehrung)",  fmt_eur(res["zins_j1"]),    ""),
+                    ("DSCR",                   f"{res['dscr']:.2f}".replace(".", ","), ""),
+                    (f"AfA ({ai['label']})",    fmt_eur(res["afa"]),         ai["basis"]),
+                    ("Steuerlast p.a.",         fmt_eur(res["steuerlast"]),   f"{steuer} %"),
+                    ("CF / Monat pre-Tax",      fmt_eur(res["cf_pre_m"]),    ""),
+                    ("CF / Monat post-Tax",     fmt_eur(res["cf_post_m"]),   ""),
+                    ("Break-Even-Miete",        fmt_eur(res["be_m"]) + "/Mon.", "inkl. Leerstand"),
+                ]),
+                ("Investment-Returns", [
+                    ("ROE (Eigenkapitalrendite)", fmt_pct(res["roe"]),        ""),
+                    ("ROI (Gesamtkapital)",       fmt_pct(res["roi"]),        ""),
+                    ("IRR (10 Jahre)",            fmt_pct(res["irr_val"]),    ""),
+                    (f"NPV ({diskont} % Diskont)", fmt_eur(res["npv_val"]),   ""),
+                    ("MOIC",                     fmt_x(res["moic"]),          "CF + Equity / EK"),
+                    ("EK-Amortisation",
+                     fmt_yr(res["amort"]) if res["amort"] else "Negativ", ""),
+                ]),
+            ]
+
+            if toggle_pro and pro_jahre:
+                j1 = pro_jahre[0]
+                kpi_sects.append(("Pro-Modus: Steuerliche Betrachtung (Jahr 1)", [
+                    ("Gebaeudewert (Pro-Basis)",      fmt_eur(j1["gebaeude_wert"]),      f"{gebaeude} % des KP"),
+                    (f"AfA p.a. ({pro_afa_satz:.1f} %)", fmt_eur(j1["afa_pro_pa"]),     "linear, konstant"),
+                    ("Schuldzinsen J1 (exakt)",       fmt_eur(j1["zinsen"]),             "monatlich berechnet"),
+                    ("ZvE aus V+V (§21 EStG)",        fmt_eur(j1["zve"]),               "Nettomiete - Zinsen - AfA"),
+                    (f"Steuerlast ({pro_grenzzins} %)", fmt_eur(j1["steuerlast"]),      "negativ = Ersparnis"),
+                    ("Steuer-Effekt / Mon.",           fmt_eur(j1["steuer_effekt_monat"]), "positiv = Steuerersparnis"),
+                    ("CF nach Steuern / Mon.",         fmt_eur(j1["cf_nach_monat"]),    ""),
+                ]))
+
+            for sec_title, rows in kpi_sects:
+                st.markdown(rep_section(sec_title), unsafe_allow_html=True)
+                for lbl, val, note in rows:
+                    st.markdown(rep_row(lbl, val, note), unsafe_allow_html=True)
+
+            pro_hinweis = (
+                f" Pro-Modus: Grenzzinssatz {pro_grenzzins} %, "
+                f"AfA {pro_afa_satz:.1f} %, Mietsteigerung {pro_miets:.1f} % p.a. —"
+                if toggle_pro else ""
+            )
+            st.markdown(
+                f'<div class="disclaimer">Rechtlicher Hinweis: Modellsimulation ohne Gewaehr. '
+                f'Keine Steuer- oder Anlageberatung.{pro_hinweis} '
+                f'AfA: {ai["label"]} — {ai["basis"]}. '
+                f'GrESt {bundesland}: {gest:.1f} %. '
+                f'Annuitaetenberechnung: monatlich exakt (Sanity-Checks aktiv). '
+                f'2025 YieldBase Analytics.</div>',
+                unsafe_allow_html=True,
+            )
+
+
 if __name__ == "__main__":
     main()
