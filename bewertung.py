@@ -233,13 +233,44 @@ html, body, [class*="css"] { font-family: var(--yb-font) !important; }
 [data-testid="stMetricLabel"] { font-size: var(--fs-xs) !important; text-transform: uppercase !important;
   letter-spacing: .05em !important; font-weight: 600 !important; }
 [data-testid="stMetricDelta"] { font-size: var(--fs-sm) !important; }
-.stTabs [data-baseweb="tab-list"] { background: var(--secondary-background-color, #f7f6f3);
-  border-radius: 9px; padding: 4px; gap: 3px; border: 1px solid rgba(128,128,128,.12); }
-.stTabs [data-baseweb="tab"] { border-radius: 7px; font-size: var(--fs-base); font-weight: 500;
-  color: color-mix(in srgb, var(--text-color, #888) 70%, transparent); }
-.stTabs [aria-selected="true"] { background: var(--background-color, #fff) !important;
-  color: var(--text-color, #111) !important; font-weight: 600 !important;
-  box-shadow: 0 1px 3px rgba(0,0,0,.08) !important; }
+/* ── Hauptnavigation — prominente Button-Leiste ──────────────── */
+/* Aktiver Button (type="primary") */
+[data-testid="baseButton-primary"] {
+  background: var(--gold) !important;
+  border-color: var(--gold) !important;
+  color: #ffffff !important;
+  font-size: 15px !important;
+  font-weight: 700 !important;
+  min-height: 54px !important;
+  border-radius: 10px !important;
+  letter-spacing: 0.025em !important;
+  box-shadow: 0 3px 14px rgba(184,144,42,.35) !important;
+  transition: box-shadow .2s ease, transform .1s ease !important;
+}
+[data-testid="baseButton-primary"]:hover {
+  box-shadow: 0 5px 20px rgba(184,144,42,.45) !important;
+  transform: translateY(-1px) !important;
+}
+/* Inaktiver Button (type="secondary") */
+[data-testid="baseButton-secondary"] {
+  background: var(--secondary-background-color, #f7f6f3) !important;
+  border: 2px solid rgba(128,128,128,.2) !important;
+  color: var(--text-color) !important;
+  font-size: 15px !important;
+  font-weight: 600 !important;
+  min-height: 54px !important;
+  border-radius: 10px !important;
+  letter-spacing: 0.025em !important;
+  opacity: 0.78;
+  transition: all .18s ease !important;
+}
+[data-testid="baseButton-secondary"]:hover {
+  border-color: var(--gold) !important;
+  color: var(--gold) !important;
+  background: var(--gold-bg) !important;
+  opacity: 1 !important;
+  transform: translateY(-1px) !important;
+}
 [data-testid="stSidebar"] > div:first-child { padding: 1.2rem 1rem; }
 </style>
 """
@@ -1051,13 +1082,39 @@ def main() -> None:
         unsafe_allow_html=True,
     )
 
-    # ── TABS (keine Emojis/Icons) ────────────────────────────────────
-    t1, t2, t3, t4 = st.tabs(["Eingabe & KPIs", "Dashboard", "Analyse", "Bericht"])
+    # ── HAUPTNAVIGATION — session-state-basiert, prominent ──────────
+    _NAV_LABELS = ["Eingabe & KPIs", "Dashboard", "Analyse", "Bericht"]
+    if "active_tab" not in st.session_state:
+        st.session_state.active_tab = _NAV_LABELS[0]
+
+    # Navigationsleiste: 4 gleich breite Buttons mit Abstand
+    st.markdown(
+        """<div style="margin-bottom:6px;margin-top:4px;">&nbsp;</div>""",
+        unsafe_allow_html=True,
+    )
+    _nav_cols = st.columns(4, gap="medium")
+    for _col, _label in zip(_nav_cols, _NAV_LABELS):
+        with _col:
+            _active = st.session_state.active_tab == _label
+            if st.button(
+                _label,
+                use_container_width=True,
+                type="primary" if _active else "secondary",
+                key=f"nav__{_label.replace(' ', '_').replace('&', 'und')}",
+            ):
+                st.session_state.active_tab = _label
+                st.rerun()
+    st.markdown(
+        """<div style="height:4px;margin-bottom:14px;">&nbsp;</div>""",
+        unsafe_allow_html=True,
+    )
+
+    active_tab = st.session_state.active_tab
 
     # ══════════════════════════════════════════════════════════════════
-    # TAB 1 — Eingabe & KPIs
+    # BEREICH 1 — Eingabe & KPIs
     # ══════════════════════════════════════════════════════════════════
-    with t1:
+    if active_tab == "Eingabe & KPIs":
 
         # ── Kernmetriken mit help-Texten (st.metric) ─────────────────
         # Spec: "Die bisherigen Metriken bleiben ganz oben bestehen.
@@ -1283,9 +1340,9 @@ def main() -> None:
 
 
     # ══════════════════════════════════════════════════════════════════
-    # TAB 2 — Dashboard
+    # BEREICH 2 — Dashboard
     # ══════════════════════════════════════════════════════════════════
-    with t2:
+    elif active_tab == "Dashboard":
         sects = [
             ("Rendite & Ertrag", [
                 ("Bruttorendite",   fmt_pct(res["brutto"]),   "Jahresmiete / KP",            "brutto",  res["brutto"]),
@@ -1345,9 +1402,9 @@ def main() -> None:
                       help="Realer monatlicher Liquiditaetsueberschuss nach Steuer.")
 
     # ══════════════════════════════════════════════════════════════════
-    # TAB 3 — Analyse
+    # BEREICH 3 — Analyse
     # ══════════════════════════════════════════════════════════════════
-    with t3:
+    elif active_tab == "Analyse":
         ca, cb = st.columns(2, gap="large")
         with ca:
             st.markdown("**Cashflow-Projektion (10 Jahre)**")
@@ -1437,9 +1494,9 @@ def main() -> None:
                                 config={"displayModeBar": False}, key="t3_pro_schuld")
 
     # ══════════════════════════════════════════════════════════════════
-    # TAB 4 — Bericht
+    # BEREICH 4 — Bericht
     # ══════════════════════════════════════════════════════════════════
-    with t4:
+    elif active_tab == "Bericht":
         col_rep, _ = st.columns([2.2, 1])
         with col_rep:
 
