@@ -428,7 +428,7 @@ def calc_all(p: dict) -> dict:
 
     # ── AfA ──────────────────────────────────────────────────────────
     afa_info  = get_afa_info(p["baujahr"])
-    afa_basis = round(gesamt * p["gebaeude"] / 100, 2)
+    afa_basis = round(kp * p["gebaeude"] / 100, 2)  # kaufpreis (nicht gesamt) — konsistent mit Pro-Modus
     if p["is_denkmal"]:
         san           = round(afa_basis * p["dk_san"] / 100, 2)
         afa           = round((afa_basis - san) * 0.02 + san * p["dk_afa"] / 100, 2)
@@ -496,7 +496,7 @@ def calc_all(p: dict) -> dict:
         iw     = round(iw * (1 + p["wert"] / 100), 2)
         eq     = round(iw - debt, 2)
 
-        irr_cfs.append(round(y_cfp + (max(0.0, eq - ek_abs) if y == 10 else 0.0), 2))
+        irr_cfs.append(round(y_cfp + (eq if y == 10 else 0.0), 2))  # vollständiger Exit-Erlös
         proj.append({
             "Jahr":           f"J{y}",
             "CF pre/Mon.":    round(y_cf  / 12, 2),
@@ -508,7 +508,7 @@ def calc_all(p: dict) -> dict:
         m_brutto = round(m_brutto * (1 + p["miets"] / 100), 2)
 
     try:    irr_val = round(calc_irr(-ek_abs, irr_cfs), 2)
-    except: irr_val = 0.0
+    except Exception: irr_val = 0.0
     npv_val  = round(calc_npv(-ek_abs, irr_cfs, p["diskont"] / 100))
     final_eq = proj[-1]["Equity"] if proj else ek_abs
     moic     = round((cum_cf + final_eq) / ek_abs, 2) if ek_abs else 0.0
@@ -840,6 +840,35 @@ def chart_pro_schuld(jahre: list[dict]) -> go.Figure:
 # 8. HAUPT-APP
 # ══════════════════════════════════════════════════════════════════════
 
+
+
+# ══════════════════════════════════════════════════════════════════════
+# CACHE-WRAPPER — Performance: vermeidet Neuberechnungen bei unveränd. Inputs
+# ══════════════════════════════════════════════════════════════════════
+
+@st.cache_data
+def cached_calc_all(params_key: tuple) -> dict:
+    """Gecachte Version von calc_all. params_key = sortiertes Tupel der Params."""
+    return calc_all(dict(params_key))
+
+
+@st.cache_data
+def cached_calc_pro(params_key: tuple, pro_key: tuple,
+                    fk: float, annuitaet: float, monatsrate: float,
+                    zins_rate_m: float, ihr_val: float) -> list:
+    """
+    Gecachte Version von calc_pro_10year.
+    Übergibt skalare res-Werte direkt (keine Listen/Dicts als Cache-Key).
+    """
+    params = dict(params_key)
+    pro    = dict(pro_key)
+    res_scalar = dict(
+        fk=fk, annuitaet=annuitaet, monatsrate=monatsrate,
+        zins_rate_m=zins_rate_m, ihr_val=ihr_val,
+    )
+    return calc_pro_10year(params, res_scalar, pro)
+
+
 def main() -> None:
     st.markdown(CSS, unsafe_allow_html=True)
 
@@ -874,8 +903,13 @@ def main() -> None:
     with st.sidebar:
 
         # ── Modus-Auswahl ─────────────────────────────────────────────
-        mode   = st.radio("Analyse-Modus", ["Einsteiger", "Experte"],
-                          horizontal=True, label_visibility="collapsed")
+        mode = st.radio(
+            "Analyse-Modus",
+            ["Einsteiger", "Experte"],
+            horizontal=True,
+            help="Einsteiger: Kern-KPIs und vereinfachte Ansicht. "
+                 "Experte: Vollständige Kennzahlen, AfA, Steuer und Projektion.",
+        )
         is_exp = (mode == "Experte")
         st.markdown("---")
 
@@ -1095,7 +1129,8 @@ def main() -> None:
         leerstand=float(leerstand), wert=float(wert),
         miets=float(miets), diskont=float(diskont),
     )
-    res     = calc_all(params)
+    params_key = tuple(sorted(params.items()))
+    res     = cached_calc_all(params_key)
     proj_df = pd.DataFrame(res["proj"])
     ai      = res["afa_info"]
 
@@ -1108,14 +1143,19 @@ def main() -> None:
             miets         = float(pro_miets),
             kosten_inf    = float(pro_kosten_inf),
         )
-        pro_jahre = calc_pro_10year(params, res, pro_params)
+        pro_jahre = cached_calc_pro(
+            params_key,
+            tuple(sorted(pro_params.items())),
+            res["fk"], res["annuitaet"], res["monatsrate"],
+            res["zins_rate_m"], res["ihr_val"],
+        )
 
     # ── STATUS BAR ────────────────────────────────────────────────────
     st.markdown(
         status_bar([
             ("Gesamtinvestition", fmt_eur(res["gesamt"])),
             ("Bruttorendite",     fmt_pct(res["brutto"])),
-            ("Nettorendite",      fmt_pct(res["netto_r"])),
+            ("Netto-Mietrendite",      fmt_pct(res["netto_r"])),
             ("Cashflow / Mon.",   fmt_eur(res["cf_pre_m"])),
             ("DSCR",              f"{res['dscr']:.2f}".replace(".", ",")),
             ("ROE",               fmt_pct(res["roe"])),
@@ -1152,10 +1192,23 @@ def main() -> None:
 
     active_tab = st.session_state.active_tab
 
+
+    # ── Onboarding-Banner (einmalig beim ersten Aufruf) ──────────────
+    if "onboarding_done" not in st.session_state:
+        st.info(
+            "**Willkommen bei LIEGANT.** Geben Sie Kaufpreis und Jahresmiete ein — "
+            "alle anderen Werte sind bereits marktüblich voreingestellt. "
+            "Die Analyse aktualisiert sich in Echtzeit."
+        )
+        if st.button("Verstanden", key="close_onboarding"):
+            st.session_state.onboarding_done = True
+            st.rerun()
+
     # ══════════════════════════════════════════════════════════════════
     # BEREICH 1 — Eingabe & KPIs
     # ══════════════════════════════════════════════════════════════════
     if active_tab == "Eingabe & KPIs":
+        st.markdown("## Eingabe & KPIs")
 
         # ── Kernmetriken mit help-Texten (st.metric) ─────────────────
         # Spec: "Die bisherigen Metriken bleiben ganz oben bestehen.
@@ -1184,6 +1237,17 @@ def main() -> None:
                  "Bankrate (Zins + Tilgung) — vor Berücksichtigung des Finanzamts. "
                  "Negativ bedeutet monatliche Zuzahlung.",
         )
+
+        # ── CTA: WOW-Moment sichtbar machen (wenn Pro-Modus inaktiv) ──
+        if not toggle_pro:
+            st.markdown(
+                '<div class="info-box" style="margin-top:8px">' 
+                '<span class="info-strong">Tipp:</span> ' 
+                'Aktivieren Sie die <strong>Netto-Betrachtung (nach Steuern)</strong> '
+                'in der Sidebar — und sehen Sie, was nach Finanzamt und Annuität '
+                'wirklich übrigbleibt.</div>',
+                unsafe_allow_html=True,
+            )
 
         # ── Pro-Modus: Steuerliche Betrachtung (Jahr 1) ──────────────
         if toggle_pro and pro_jahre:
@@ -1321,7 +1385,7 @@ def main() -> None:
             if is_exp:
                 kpis = [
                     ("Bruttorendite",    fmt_pct(res["brutto"]),   None,                  "brutto",   res["brutto"]),
-                    ("Netto-Rendite",    fmt_pct(res["netto_r"]),  "inkl. IHR+Leerstand", "netto_r",  res["netto_r"]),
+                    ("Netto-Mietrendite",    fmt_pct(res["netto_r"]),  "inkl. IHR+Leerstand", "netto_r",  res["netto_r"]),
                     ("Cap Rate",         fmt_pct(res["cap_rate"]), "NOI / Kaufpreis",      "cap_rate", res["cap_rate"]),
                     ("DSCR",             f"{res['dscr']:.2f}".replace(".",","), "Schuldendeckung", "dscr", res["dscr"]),
                     ("LTV",              fmt_pct(res["ltv"],1),    "FK / Kaufpreis",       "ltv",      res["ltv"]),
@@ -1384,10 +1448,11 @@ def main() -> None:
     # BEREICH 2 — Dashboard
     # ══════════════════════════════════════════════════════════════════
     elif active_tab == "Dashboard":
+        st.markdown("## Dashboard")
         sects = [
             ("Rendite & Ertrag", [
                 ("Bruttorendite",   fmt_pct(res["brutto"]),   "Jahresmiete / KP",            "brutto",  res["brutto"]),
-                ("Netto-Rendite",   fmt_pct(res["netto_r"]),  "nach Bew.+Leerstand+IHR",    "netto_r", res["netto_r"]),
+                ("Netto-Mietrendite",   fmt_pct(res["netto_r"]),  "nach Bew.+Leerstand+IHR",    "netto_r", res["netto_r"]),
                 ("Cap Rate",        fmt_pct(res["cap_rate"]), "NOI / Kaufpreis",              "cap_rate",res["cap_rate"]),
                 ("Kaufpreisfaktor", fmt_x(res["faktor"]),     None,                           "faktor",  res["faktor"]),
                 ("Jahresmiete",     fmt_eur(jahresmiete),      "Brutto",                       None,      None),
@@ -1446,6 +1511,7 @@ def main() -> None:
     # BEREICH 3 — Analyse
     # ══════════════════════════════════════════════════════════════════
     elif active_tab == "Analyse":
+        st.markdown("## Analyse")
         ca, cb = st.columns(2, gap="large")
         with ca:
             st.markdown("**Cashflow-Projektion (10 Jahre)**")
@@ -1482,7 +1548,7 @@ def main() -> None:
 
         sc_kpis = [
             ("Bruttorendite",   "brutto",   fmt_pct),
-            ("Netto-Rendite",   "netto_r",  fmt_pct),
+            ("Netto-Mietrendite",   "netto_r",  fmt_pct),
             ("DSCR",            "dscr",     lambda v: f"{v:.2f}".replace(".", ",")),
             ("CF / Mon. (pre)", "cf_pre_m", fmt_eur),
             ("LTV",             "ltv",      lambda v: fmt_pct(v, 1)),
@@ -1538,6 +1604,7 @@ def main() -> None:
     # BEREICH 4 — Bericht
     # ══════════════════════════════════════════════════════════════════
     elif active_tab == "Bericht":
+        st.markdown("## Bericht")
         col_rep, _ = st.columns([2.2, 1])
         with col_rep:
 
@@ -1613,7 +1680,7 @@ def main() -> None:
                     ("Nettomietertrag",                   fmt_eur(res["netto"]),      ""),
                     ("NOI (Cap-Rate-Basis)",              fmt_eur(res["noi"]),        "ohne Leerstand"),
                     ("Bruttorendite",                     fmt_pct(res["brutto"]),     ""),
-                    ("Netto-Rendite",                     fmt_pct(res["netto_r"]),    ""),
+                    ("Netto-Mietrendite",                     fmt_pct(res["netto_r"]),    ""),
                     ("Cap Rate",                         fmt_pct(res["cap_rate"]),   ""),
                     ("Kaufpreisfaktor",                   fmt_x(res["faktor"]),       ""),
                 ]),
@@ -1670,6 +1737,9 @@ def main() -> None:
                 f'AfA: {ai["label"]} — {ai["basis"]}. '
                 f'GrESt {bundesland}: {gest:.1f} %. '
                 f'Annuitaetenberechnung: monatlich exakt (Sanity-Checks aktiv). '
+                f'Veräußerungsgewinne innerhalb der Spekulationsfrist von 10 Jahren '
+                f'nach Anschaffung sind gemäß § 23 EStG als privates Veräußerungsgeschäft '
+                f'voll einkommensteuerpflichtig und in dieser Analyse nicht berücksichtigt. '
                 f'2025 LIEGANT · Analyse für echte Liegenschaften.</div>',
                 unsafe_allow_html=True,
             )
