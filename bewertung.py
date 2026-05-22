@@ -967,10 +967,10 @@ def main() -> None:
         st.markdown("**Pro-Funktionen**")
 
         toggle_pro = st.checkbox(
-            "Pro-Modus aktivieren (Steuern und Verlauf)",
+            "Netto-Betrachtung (nach Steuern) aktivieren",
             value=False,
-            help="Schaltet die steuerliche Optimierung (§21 EStG) und die langfristige "
-                 "10-Jahres-Vorschau mit monatlich exakter Annuitätenberechnung frei.",
+            help="Schaltet die steuerliche Optimierung und die langfristige "
+                 "10-Jahres-Vorschau frei.",
         )
 
         # Default-Werte für Pro-Parameter (auch wenn deaktiviert)
@@ -1092,7 +1092,7 @@ def main() -> None:
             j1 = pro_jahre[0]  # Jahr 1
 
             st.markdown("---")
-            st.markdown("## Steuerliche Betrachtung (Jahr 1)")
+            st.markdown("## Netto-Betrachtung (Jahr 1)")
 
             p1, p2 = st.columns(2)
             p1.metric(
@@ -1161,6 +1161,7 @@ def main() -> None:
                     chart_pro_cf(pro_jahre),
                     use_container_width=True,
                     config={"displayModeBar": False},
+                    key="t1_pro_cf",
                 )
             with ch2:
                 st.markdown("**Restschuld-Verlauf**")
@@ -1169,6 +1170,7 @@ def main() -> None:
                     chart_pro_schuld(pro_jahre),
                     use_container_width=True,
                     config={"displayModeBar": False},
+                    key="t1_pro_schuld",
                 )
 
             # Übersichts-Tabelle Pro-Jahresverlauf
@@ -1260,6 +1262,7 @@ def main() -> None:
                     chart_donut(kaufpreis, res["gest_abs"],
                                 res["notar_abs"], res["makler_abs"]),
                     use_container_width=True, config={"displayModeBar": False},
+                    key="t1_donut",
                 )
             with d2:
                 for n, v in [("Kaufpreis", kaufpreis),
@@ -1350,12 +1353,12 @@ def main() -> None:
             st.markdown("**Cashflow-Projektion (10 Jahre)**")
             st.caption(f"Annuitaet {fmt_eur(res['annuitaet']/12)}/Mon konstant — exakte monatliche Berechnung")
             st.plotly_chart(chart_cashflow(proj_df), use_container_width=True,
-                            config={"displayModeBar": False})
+                            config={"displayModeBar": False}, key="t3_cashflow")
         with cb:
             st.markdown("**Vermogensaufbau**")
             st.caption("Eigenkapital = Immobilienwert - Restschuld")
             st.plotly_chart(chart_equity(proj_df), use_container_width=True,
-                            config={"displayModeBar": False})
+                            config={"displayModeBar": False}, key="t3_equity")
 
         st.markdown("---")
         st.markdown("**Szenario-Vergleich**")
@@ -1427,11 +1430,11 @@ def main() -> None:
             with ch1:
                 st.markdown("**Cashflow nach Steuern (monatlich)**")
                 st.plotly_chart(chart_pro_cf(pro_jahre), use_container_width=True,
-                                config={"displayModeBar": False})
+                                config={"displayModeBar": False}, key="t3_pro_cf")
             with ch2:
                 st.markdown("**Restschuld-Verlauf**")
                 st.plotly_chart(chart_pro_schuld(pro_jahre), use_container_width=True,
-                                config={"displayModeBar": False})
+                                config={"displayModeBar": False}, key="t3_pro_schuld")
 
     # ══════════════════════════════════════════════════════════════════
     # TAB 4 — Bericht
